@@ -1,1 +1,1 @@
-已完成纯前端原型工具主链路：项目列表、多画板编辑、预览、AI 生成、AI 导出、AI 对齐测试、localStorage 持久化与撤销重做。
+已收敛为单套前端实现：入口切到 HomePage/EditorPage + 扁平 store/ai/exporters/constants，`npm run build` 已通过。

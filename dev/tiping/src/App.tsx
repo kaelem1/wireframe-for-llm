@@ -8,7 +8,7 @@ import { EditorPage } from "./components/EditorPage";
 import { HomePage } from "./components/HomePage";
 import { useAppStore } from "./store";
 
-export default function App() {
+function App() {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const loadPersisted = useAppStore((state) => state.loadPersisted);
   const saveNow = useAppStore((state) => state.saveNow);
@@ -20,10 +20,11 @@ export default function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       saveNow();
-    }, 30_000);
-
+    }, 30000);
     return () => window.clearInterval(timer);
   }, [saveNow]);
 
   return activeProjectId ? <EditorPage /> : <HomePage />;
 }
+
+export default App;
