@@ -1,0 +1,16 @@
+/*
+[PROTOCOL]:
+1. Update this header after logic changes.
+2. Check sibling .folder.md after updates.
+*/
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowSyntheticDefaultImports": true,
+    "noEmit": true
+  },
+  "include": ["vite.config.ts"]
+}
