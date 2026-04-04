@@ -6,7 +6,7 @@
 
 import { LOCAL_STORAGE_KEY } from './constants'
 import { parseProjectJson } from './project'
-import type { WorkspaceSnapshot } from '../types/schema'
+import type { PersistedState, WorkspaceSnapshot } from '../types/schema'
 
 const normalizeSnapshot = (value: unknown): WorkspaceSnapshot | null => {
   if (!value || typeof value !== 'object') {
@@ -26,10 +26,17 @@ const normalizeSnapshot = (value: unknown): WorkspaceSnapshot | null => {
         }
       : { baseUrl: '', apiKey: '', model: '' }
 
+  const currentBoardId =
+    typeof record.currentBoardId === 'string'
+      ? record.currentBoardId
+      : typeof record.activeBoardId === 'string'
+        ? record.activeBoardId
+        : null
+
   return {
     project,
     settings,
-    activeBoardId: typeof record.activeBoardId === 'string' ? record.activeBoardId : null,
+    activeBoardId: currentBoardId,
   }
 }
 
@@ -56,7 +63,20 @@ export const saveWorkspaceSnapshot = (snapshot: WorkspaceSnapshot) => {
     return
   }
 
-  window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(snapshot))
+  if (!snapshot.project) {
+    window.localStorage.removeItem(LOCAL_STORAGE_KEY)
+    return
+  }
+
+  const persisted: PersistedState = {
+    project: snapshot.project,
+    currentBoardId: snapshot.activeBoardId ?? snapshot.project.boards[0]?.id ?? '',
+    selectedComponentId: null,
+    settings: snapshot.settings,
+    setupCompleted: true,
+  }
+
+  window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(persisted))
 }
 
 export const createDebouncedSnapshotSaver = (delay = 500) => {
