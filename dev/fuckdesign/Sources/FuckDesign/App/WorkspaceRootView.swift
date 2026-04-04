@@ -23,33 +23,42 @@ struct WorkspaceRootView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            ScreenSidebarView(store: store)
-        } content: {
-            InfiniteCanvasView(store: store)
-        } detail: {
-            InspectorView(store: store)
-        }
-        .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 1320, minHeight: 820)
-        .focusedObject(store)
-        .toolbar {
-            ToolbarItemGroup(placement: .automatic) {
-                Button("Select") { store.tool = .select }
-                Button("Hand") { store.tool = .hand }
-                Divider()
-                Button("Rectangle") { store.insertElement(kind: .rectangle) }
-                Button("Ellipse") { store.insertElement(kind: .ellipse) }
-                Button("Line") { store.insertElement(kind: .line) }
-                Button("Text") { store.insertElement(kind: .text) }
-                Divider()
-                Button("Preview") { store.showingPreview = true }
-                Button("AI") { store.showingAI = true }
-                Menu("Export") {
-                    Button("Markdown") { exportMarkdown() }
-                    Button("JSON") { exportJSON() }
-                    Button("PNG Screens") { exportScreenshots() }
+        ZStack {
+            NavigationSplitView {
+                ScreenSidebarView(store: store)
+            } content: {
+                InfiniteCanvasView(store: store)
+            } detail: {
+                InspectorView(store: store)
+            }
+            .navigationSplitViewStyle(.balanced)
+            .frame(minWidth: 1320, minHeight: 820)
+            .focusedObject(store)
+            .toolbar {
+                ToolbarItemGroup(placement: .automatic) {
+                    Button("Select") { store.tool = .select }
+                    Button("Hand") { store.tool = .hand }
+                    Divider()
+                    Button("Rectangle") { store.insertElement(kind: .rectangle) }
+                    Button("Ellipse") { store.insertElement(kind: .ellipse) }
+                    Button("Line") { store.insertElement(kind: .line) }
+                    Button("Text") { store.insertElement(kind: .text) }
+                    Divider()
+                    Button("Preview") { store.showingPreview = true }
+                    Button("AI") { store.showingAI = true }
+                    Menu("Export") {
+                        Button("Markdown") { exportMarkdown() }
+                        Button("JSON") { exportJSON() }
+                        Button("PNG Screens") { exportScreenshots() }
+                    }
                 }
+            }
+
+            if store.showingPreview {
+                PreviewPlayerView(store: store)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black.opacity(0.12))
+                    .zIndex(1)
             }
         }
         .onAppear {
@@ -91,9 +100,6 @@ struct WorkspaceRootView: View {
                 isGenerating: $isGeneratingAI,
                 generate: generateAI
             )
-        }
-        .fullScreenCover(isPresented: $store.showingPreview) {
-            PreviewPlayerView(store: store)
         }
         .alert(item: $notice) { notice in
             Alert(title: Text(notice.title), message: Text(notice.message), dismissButton: .default(Text("OK")))

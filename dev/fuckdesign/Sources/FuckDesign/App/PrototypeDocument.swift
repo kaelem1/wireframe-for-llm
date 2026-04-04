@@ -12,7 +12,7 @@ extension UTType {
 }
 
 struct PrototypeDocument: FileDocument {
-    static var readableContentTypes: [UTType] = [.aiPrototype]
+    static let readableContentTypes: [UTType] = [.aiPrototype]
 
     var project: PrototypeProject
 

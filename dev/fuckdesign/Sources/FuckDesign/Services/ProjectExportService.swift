@@ -114,14 +114,15 @@ struct ProjectExportService {
                     let source = element.semanticName
                     let trigger = interaction.trigger.title
                     let transition = interaction.transition.title
-                    let action = switch interaction.action {
+                    let action: String
+                    switch interaction.action {
                     case .navigate(let screenID):
-                        "跳转到 \"\(screensByID[screenID]?.name ?? "未知页面")\""
+                        action = "跳转到 \"\(screensByID[screenID]?.name ?? "未知页面")\""
                     case .goBack:
-                        "返回上一页"
+                        action = "返回上一页"
                     case .toggleState(let stateID):
                         let name = stateID.flatMap { stateNamesByElementID[element.id]?[$0] } ?? "下一个状态"
-                        "切换到 \"\(name)\""
+                        action = "切换到 \"\(name)\""
                     }
                     return "\"\(source)\" -> \(trigger) -> \(action)（\(transition)）"
                 }

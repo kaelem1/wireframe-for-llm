@@ -1,17 +1,20 @@
 APP_NAME := FuckDesign
-SWIFT := xcrun swift
+SWIFT := $(shell if [ -x /opt/homebrew/opt/swift/bin/swift ]; then echo /opt/homebrew/opt/swift/bin/swift; else echo xcrun swift; fi)
 BUILD_DIR := .build/release
 APP_DIR := Build/$(APP_NAME).app
 MACOS_DIR := $(APP_DIR)/Contents/MacOS
 RESOURCES_DIR := $(APP_DIR)/Contents/Resources
 
-.PHONY: build run install clean
+.PHONY: build run test install clean
 
 build:
 	$(SWIFT) build
 
 run:
 	$(SWIFT) run $(APP_NAME)
+
+test:
+	$(SWIFT) test
 
 install:
 	$(SWIFT) build -c release

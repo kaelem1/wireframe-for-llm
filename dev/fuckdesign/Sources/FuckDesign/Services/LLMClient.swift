@@ -73,7 +73,7 @@ struct LLMClient {
             throw Error.invalidResponse
         }
 
-        let content = switch choice.message.content {
+        let content: String? = switch choice.message.content {
         case .string(let value):
             value
         case .parts(let parts):
@@ -82,7 +82,7 @@ struct LLMClient {
             nil
         }
 
-        guard let content, let contentData = content.data(using: .utf8) else {
+        guard let content, let contentData = content.data(using: String.Encoding.utf8) else {
             throw Error.missingContent
         }
 
@@ -194,11 +194,6 @@ private struct ChatCompletionRequest: Encodable {
 
     struct ResponseFormat: Encodable {
         var type: String
-
-        enum CodingKeys: String, CodingKey {
-            case type
-            case schema = "json_schema"
-        }
     }
 
     var model: String

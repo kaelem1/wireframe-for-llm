@@ -4,23 +4,26 @@
 2. 更新后检查所属 `.folder.md`
 */
 
-import XCTest
+import Foundation
+import Testing
 @testable import FuckDesign
 
-final class PrototypeModelTests: XCTestCase {
-    func testProjectRoundTripPreservesScreensElementsAndAIConfig() throws {
+struct PrototypeModelTests {
+    @Test
+    func projectRoundTripPreservesScreensElementsAndAIConfig() throws {
         let project = PrototypeProject.sample
         let data = try JSONEncoder.projectEncoder.encode(project)
         let decoded = try JSONDecoder.projectDecoder.decode(PrototypeProject.self, from: data)
 
-        XCTAssertEqual(decoded.name, project.name)
-        XCTAssertEqual(decoded.screens.count, 1)
-        XCTAssertEqual(decoded.screens.first?.elements.count, 1)
-        XCTAssertEqual(decoded.ai.baseURL, "https://api.siliconflow.cn/v1")
-        XCTAssertTrue(decoded.displaySemanticLabels)
+        #expect(decoded.name == project.name)
+        #expect(decoded.screens.count == 1)
+        #expect(decoded.screens.first?.elements.count == 1)
+        #expect(decoded.ai.baseURL == "https://api.siliconflow.cn/v1")
+        #expect(decoded.displaySemanticLabels)
     }
 
-    func testInteractionActionEncodingDistinguishesNavigateAndToggleState() throws {
+    @Test
+    func interactionActionEncodingDistinguishesNavigateAndToggleState() throws {
         let target = UUID()
         let state = UUID()
         let actions: [InteractionAction] = [
@@ -32,19 +35,20 @@ final class PrototypeModelTests: XCTestCase {
         let data = try JSONEncoder.projectEncoder.encode(actions)
         let decoded = try JSONDecoder.projectDecoder.decode([InteractionAction].self, from: data)
 
-        XCTAssertEqual(decoded[0], .navigate(screenID: target))
-        XCTAssertEqual(decoded[1], .toggleState(stateID: state))
-        XCTAssertEqual(decoded[2], .goBack)
+        #expect(decoded[0] == InteractionAction.navigate(screenID: target))
+        #expect(decoded[1] == InteractionAction.toggleState(stateID: state))
+        #expect(decoded[2] == InteractionAction.goBack)
     }
 
-    func testVisualStateListKeepsDefaultFlagAndText() throws {
+    @Test
+    func visualStateListKeepsDefaultFlagAndText() throws {
         let element = Screen.sample.elements[0]
         let data = try JSONEncoder.projectEncoder.encode(element)
         let decoded = try JSONDecoder.projectDecoder.decode(Element.self, from: data)
 
-        XCTAssertEqual(decoded.states.count, 2)
-        XCTAssertEqual(decoded.states.first?.isDefault, true)
-        XCTAssertEqual(decoded.states.last?.name, "选中态")
-        XCTAssertEqual(decoded.states.last?.text, "Button")
+        #expect(decoded.states.count == 2)
+        #expect(decoded.states.first?.isDefault == true)
+        #expect(decoded.states.last?.name == "选中态")
+        #expect(decoded.states.last?.text == "Button")
     }
 }

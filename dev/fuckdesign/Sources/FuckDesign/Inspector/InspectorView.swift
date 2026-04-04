@@ -141,13 +141,13 @@ struct InspectorView: View {
 
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                 GridRow {
-                    numberField("X", value: elementBinding(element.id, path: \.frame.x, fallback: element.frame.x))
-                    numberField("Y", value: elementBinding(element.id, path: \.frame.y, fallback: element.frame.y))
+                    numberField("X", value: elementBinding(element.id, path: \.x, fallback: element.frame.x))
+                    numberField("Y", value: elementBinding(element.id, path: \.y, fallback: element.frame.y))
                 }
                 if element.kind != .line {
                     GridRow {
-                        numberField("Width", value: elementBinding(element.id, path: \.frame.width, fallback: element.frame.width))
-                        numberField("Height", value: elementBinding(element.id, path: \.frame.height, fallback: element.frame.height))
+                        numberField("Width", value: elementBinding(element.id, path: \.width, fallback: element.frame.width))
+                        numberField("Height", value: elementBinding(element.id, path: \.height, fallback: element.frame.height))
                     }
                 }
             }

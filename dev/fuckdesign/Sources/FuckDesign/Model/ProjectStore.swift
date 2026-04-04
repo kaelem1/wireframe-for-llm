@@ -116,7 +116,8 @@ final class ProjectStore: ObservableObject {
                     line.end.x += delta.width
                     line.start.y += delta.height
                     line.end.y += delta.height
-                    line = snap(line)
+                    line.start = snap(line.start)
+                    line.end = snap(line.end)
                     project.screens[currentScreenIndex].elements[index].line = line
                 case .rectangle, .ellipse, .text:
                     var frame = element.frame
@@ -254,11 +255,11 @@ final class ProjectStore: ObservableObject {
     func deleteCurrentScreen() {
         guard project.screens.count > 1 else { return }
         let fallback = project.screens[max(0, currentScreenIndex - 1)].id
-        updateProject {
-            $0.screens.removeAll { $0.id == project.currentScreenID }
-            $0.currentScreenID = fallback
-            if !$0.screens.contains(where: { $0.id == $0.preview.initialScreenID }) {
-                $0.preview.initialScreenID = fallback
+        updateProject { project in
+            project.screens.removeAll { $0.id == project.currentScreenID }
+            project.currentScreenID = fallback
+            if !project.screens.contains(where: { screen in screen.id == project.preview.initialScreenID }) {
+                project.preview.initialScreenID = fallback
             }
         }
         clearSelection()
@@ -449,7 +450,6 @@ final class ProjectStore: ObservableObject {
         updateProject {
             let elements = $0.screens[currentScreenIndex].elements
             var reordered = elements
-            let step = offset > 0 ? -1 : 1
             let indexes = elements.indices.filter { selection.contains(elements[$0].id) }.sorted(by: offset > 0 ? (>) : (<))
             for index in indexes {
                 let target = index + offset
