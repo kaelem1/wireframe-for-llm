@@ -1,0 +1,201 @@
+/*
+[PROTOCOL]:
+1. 逻辑变更后更新此 Header
+2. 更新后检查所属 `.folder.md`
+*/
+
+import { useEffect, useRef } from 'react'
+import { AIGeneratorDialog } from './components/AIGeneratorDialog'
+import { BoardCanvas } from './components/BoardCanvas'
+import { BoardStrip } from './components/BoardStrip'
+import { ComponentPalette } from './components/ComponentPalette'
+import { InteractionPanel } from './components/InteractionPanel'
+import { PreviewOverlay } from './components/PreviewOverlay'
+import { SettingsDialog } from './components/SettingsDialog'
+import { SetupDialog } from './components/SetupDialog'
+import { Toolbar } from './components/Toolbar'
+import { useAppStore } from './stores/appStore'
+import { DEVICE_PRESETS } from './utils/constants'
+import { downloadJson } from './utils/project'
+import { createDebouncedSnapshotSaver } from './utils/storage'
+
+const saveSnapshot = createDebouncedSnapshotSaver(500)
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+}
+
+export default function App() {
+  const importRef = useRef<HTMLInputElement>(null)
+  const project = useAppStore((state) => state.project)
+  const settings = useAppStore((state) => state.settings)
+  const activeBoardId = useAppStore((state) => state.activeBoardId)
+  const selectedComponentId = useAppStore((state) => state.selectedComponentId)
+  const isPreview = useAppStore((state) => state.isPreview)
+  const isAiPanelOpen = useAppStore((state) => state.isAiPanelOpen)
+  const isSettingsOpen = useAppStore((state) => state.isSettingsOpen)
+  const initializeProject = useAppStore((state) => state.initializeProject)
+  const importProjectJson = useAppStore((state) => state.importProjectJson)
+  const exportProject = useAppStore((state) => state.exportProjectJson)
+  const setProjectName = useAppStore((state) => state.setProjectName)
+  const setShowAI = useAppStore((state) => state.setShowAI)
+  const setShowSettings = useAppStore((state) => state.setShowSettings)
+  const addBoard = useAppStore((state) => state.addBoard)
+  const deleteComponent = useAppStore((state) => state.deleteComponent)
+  const duplicateComponent = useAppStore((state) => state.duplicateComponent)
+  const moveSelectedBy = useAppStore((state) => state.moveSelectedBy)
+  const togglePreview = useAppStore((state) => state.togglePreview)
+  const getWorkspaceSnapshot = useAppStore((state) => state.getWorkspaceSnapshot)
+  const undo = useAppStore((state) => state.undo)
+  const redo = useAppStore((state) => state.redo)
+
+  useEffect(() => {
+    if (!project) {
+      return
+    }
+
+    saveSnapshot(getWorkspaceSnapshot())
+  }, [project, settings, activeBoardId, getWorkspaceSnapshot])
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const meta = event.metaKey || event.ctrlKey
+
+      if (meta && event.key.toLowerCase() === 'p') {
+        event.preventDefault()
+        if (project) {
+          togglePreview()
+        }
+      }
+
+      if (meta && event.key.toLowerCase() === 's') {
+        event.preventDefault()
+        if (!project) {
+          return
+        }
+        downloadJson(`${project.project || 'wireframe-project'}.json`, JSON.parse(exportProject()))
+      }
+
+      if (isTypingTarget(event.target)) {
+        return
+      }
+
+      if (meta && event.key.toLowerCase() === 'd' && selectedComponentId) {
+        event.preventDefault()
+        duplicateComponent(selectedComponentId)
+      }
+
+      if (meta && event.key.toLowerCase() === 'n') {
+        event.preventDefault()
+        addBoard()
+      }
+
+      if (meta && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) {
+          redo()
+        } else {
+          undo()
+        }
+      }
+
+      if (event.key === 'Backspace' && selectedComponentId) {
+        event.preventDefault()
+        deleteComponent(selectedComponentId)
+      }
+
+      if (selectedComponentId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+        event.preventDefault()
+        const step = event.shiftKey ? 8 : 1
+        if (event.key === 'ArrowUp') moveSelectedBy(0, -step)
+        if (event.key === 'ArrowDown') moveSelectedBy(0, step)
+        if (event.key === 'ArrowLeft') moveSelectedBy(-step, 0)
+        if (event.key === 'ArrowRight') moveSelectedBy(step, 0)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    addBoard,
+    deleteComponent,
+    duplicateComponent,
+    exportProject,
+    moveSelectedBy,
+    project,
+    redo,
+    selectedComponentId,
+    togglePreview,
+    undo,
+  ])
+
+  if (!project) {
+    return (
+      <SetupDialog
+        onCreate={(projectName, device, width, height) =>
+          initializeProject(projectName, device, { width, height })
+        }
+      />
+    )
+  }
+
+  const deviceLabel = DEVICE_PRESETS.find((item) => item.key === project.device)?.label ?? project.device
+
+  return (
+    <>
+      <div className="app-shell">
+        <Toolbar
+          projectName={project.project}
+          deviceLabel={deviceLabel}
+          boardSizeLabel={`${project.boardSize.width} × ${project.boardSize.height}`}
+          isPreview={isPreview}
+          onProjectNameChange={setProjectName}
+          onExport={() => downloadJson(`${project.project || 'wireframe-project'}.json`, JSON.parse(exportProject()))}
+          onImport={() => importRef.current?.click()}
+          onOpenAI={() => setShowAI(true)}
+          onTogglePreview={togglePreview}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+
+        <div className="workspace">
+          <aside className="workspace__sidebar workspace__sidebar--left">
+            <ComponentPalette />
+          </aside>
+
+          <main className="workspace__center">
+            <BoardCanvas />
+          </main>
+
+          <aside className="workspace__sidebar workspace__sidebar--right">
+            <InteractionPanel />
+          </aside>
+        </div>
+
+        <BoardStrip />
+      </div>
+
+      <input
+        ref={importRef}
+        type="file"
+        accept=".json,application/json"
+        hidden
+        onChange={async (event) => {
+          const file = event.target.files?.[0]
+          if (!file) {
+            return
+          }
+          importProjectJson(await file.text())
+          event.target.value = ''
+        }}
+      />
+
+      <AIGeneratorDialog open={isAiPanelOpen} />
+      <SettingsDialog open={isSettingsOpen} />
+      <PreviewOverlay />
+    </>
+  )
+}
