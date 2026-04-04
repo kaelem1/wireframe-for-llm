@@ -4,13 +4,136 @@
 2. 更新后检查所属 `.folder.md`
 */
 
+import { useEffect, useRef, useState } from 'react'
 import { createRestoreIframeHtml, generateRestoreCode } from '../utils/ai'
 import { getBoardById } from '../utils/project'
 import { useAppStore } from '../stores/appStore'
+import type { ProjectData } from '../types/schema'
 import { WireframeBlock } from './WireframeBlock'
 
 interface SettingsDialogProps {
   open: boolean
+}
+
+function RestorePreview({
+  project,
+  initialBoardId,
+}: {
+  project: ProjectData
+  initialBoardId: string
+}) {
+  const longPressTimer = useRef<number | null>(null)
+  const pointerStart = useRef<{ x: number; y: number } | null>(null)
+  const [boardStack, setBoardStack] = useState<string[]>([initialBoardId])
+  const [modalId, setModalId] = useState<string | null>(null)
+  const [direction, setDirection] = useState<'forward' | 'back' | null>(null)
+
+  useEffect(() => {
+    setBoardStack([initialBoardId])
+    setModalId(null)
+    setDirection(null)
+  }, [initialBoardId, project])
+
+  const boardId = boardStack.at(-1)
+  const board = boardId ? getBoardById(project, boardId) : null
+  const modal = modalId ? board?.components.find((item) => item.id === modalId) : null
+  const breadcrumb = boardStack
+    .map((item) => getBoardById(project, item)?.name)
+    .filter(Boolean)
+    .join(' → ')
+
+  if (!board) {
+    return null
+  }
+
+  const runInteraction = (componentId: string, trigger: 'tap' | 'longPress' | 'swipe') => {
+    const component = board.components.find((item) => item.id === componentId)
+    const interaction = component?.interactions.find((item) => item.trigger === trigger)
+    if (!interaction) {
+      return
+    }
+
+    if (interaction.action === 'navigate' && interaction.target && getBoardById(project, interaction.target)) {
+      setBoardStack((current) => [...current, interaction.target!])
+      setModalId(null)
+      setDirection('forward')
+    }
+
+    if (interaction.action === 'back') {
+      setBoardStack((current) => {
+        if (current.length <= 1) {
+          return current
+        }
+        setModalId(null)
+        setDirection('back')
+        return current.slice(0, -1)
+      })
+    }
+
+    if (interaction.action === 'showModal' && interaction.target) {
+      setModalId(interaction.target)
+    }
+  }
+
+  return (
+    <>
+      <div className="canvas-header">
+        <span>{breadcrumb}</span>
+      </div>
+      <div
+        className={direction === 'back' ? 'restore-test__device preview-board is-back' : 'restore-test__device preview-board is-forward'}
+        style={{ width: project.boardSize.width, height: project.boardSize.height }}
+      >
+        {board.components.map((component) => {
+          const firstInteraction = component.interactions[0]
+          const badge =
+            firstInteraction?.action === 'navigate'
+              ? `→ ${getBoardById(project, firstInteraction.target ?? '')?.name ?? ''}`
+              : firstInteraction?.action === 'showModal'
+                ? '→ 弹窗'
+                : firstInteraction?.action === 'back'
+                  ? '→ 返回'
+                  : null
+
+          return (
+            <div
+              key={component.id}
+              onClick={() => runInteraction(component.id, 'tap')}
+              onPointerDown={(event) => {
+                pointerStart.current = { x: event.clientX, y: event.clientY }
+                if (longPressTimer.current !== null) {
+                  window.clearTimeout(longPressTimer.current)
+                }
+                longPressTimer.current = window.setTimeout(() => runInteraction(component.id, 'longPress'), 350)
+              }}
+              onPointerUp={(event) => {
+                if (longPressTimer.current !== null) {
+                  window.clearTimeout(longPressTimer.current)
+                  longPressTimer.current = null
+                }
+                if (!pointerStart.current) {
+                  return
+                }
+                const distance = event.clientX - pointerStart.current.x
+                if (Math.abs(distance) > 30) {
+                  runInteraction(component.id, 'swipe')
+                }
+                pointerStart.current = null
+              }}
+            >
+              <WireframeBlock component={component} preview badge={badge} />
+            </div>
+          )
+        })}
+
+        {modal ? (
+          <div className="preview-modal-mask" onClick={() => setModalId(null)}>
+            <WireframeBlock component={modal} preview />
+          </div>
+        ) : null}
+      </div>
+    </>
+  )
 }
 
 export function SettingsDialog({ open }: SettingsDialogProps) {
@@ -102,11 +225,7 @@ export function SettingsDialog({ open }: SettingsDialogProps) {
           <div className="restore-test">
             <div className="restore-test__pane">
               <div className="restore-test__title">原始版本</div>
-              <div className="restore-test__device" style={{ width: project.boardSize.width, height: project.boardSize.height }}>
-                {board.components.map((component) => (
-                  <WireframeBlock key={component.id} component={component} preview />
-                ))}
-              </div>
+              <RestorePreview project={project} initialBoardId={board.id} />
             </div>
 
             <div className="restore-test__pane">
