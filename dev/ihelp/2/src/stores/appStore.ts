@@ -3,7 +3,8 @@
 1. 逻辑变更后更新此 Header
 2. 当前把单一 wireframe 工作态、编辑命令与多选状态并入同一 store
 3. 画布始终运行在线框编辑态，不再维护 on/off 双快照切换
-4. 更新后检查所属 `.folder.md`
+4. 待放置组件持续保留，直到显式切换、取消或选中画布组件
+5. 更新后检查所属 `.folder.md`
 */
 
 import { applyPatches, enablePatches, produceWithPatches, type Patch } from 'immer'
@@ -102,9 +103,6 @@ type StoreState = {
   selectComponents: (componentIds: string[]) => void
   setEditingComponentId: (componentId: string | null) => void
   setPendingComponentType: (type: ComponentType | null) => void
-  startWireframePage: () => void
-  clearWireframePage: () => void
-  setWireframePurpose: (purpose: string) => void
   addBoard: () => void
   deleteBoard: (boardId: string) => void
   reorderBoards: (fromIndex: number, toIndex: number) => void
@@ -121,7 +119,6 @@ type StoreState = {
   updateComponentFrames: (
     updates: Array<Pick<ProtoComponent, 'id' | 'x' | 'y' | 'width' | 'height'>>,
   ) => void
-  clearActiveBoardComponents: () => void
   reorderComponents: (boardId: string, fromIndex: number, toIndex: number) => void
   deleteComponent: (componentId: string) => void
   deleteSelectedComponents: () => void
@@ -158,10 +155,6 @@ function createDefaultWireframeState(): WireframeState {
   return {
     purpose: '',
   }
-}
-
-function cloneProject(project: ProjectData | null) {
-  return project ? parseProjectJson(JSON.stringify(project)) : null
 }
 
 function resetEditingState() {
@@ -323,12 +316,14 @@ export const useAppStore = create<StoreState>((set, get) => {
       set({
         selectedComponentId,
         selectedComponentIds: selectedComponentId ? [selectedComponentId] : [],
+        pendingComponentType: null,
       }),
     selectComponents: (selectedComponentIds) =>
       set({
         selectedComponentId: selectedComponentIds.at(-1) ?? null,
         selectedComponentIds,
         editingComponentId: null,
+        pendingComponentType: null,
       }),
     setEditingComponentId: (editingComponentId) => set({ editingComponentId }),
     setPendingComponentType: (pendingComponentType) =>
@@ -338,51 +333,6 @@ export const useAppStore = create<StoreState>((set, get) => {
         selectedComponentIds: [],
         editingComponentId: null,
       }),
-    startWireframePage: () =>
-      set((state) => {
-        if (!state.project) {
-          return state
-        }
-
-        const project = cloneProject(state.project)
-        const activeBoardId = state.activeBoardId ?? project?.boards[0]?.id ?? null
-        const board = project && activeBoardId ? getBoardById(project, activeBoardId) : project?.boards[0] ?? null
-
-        if (!project || !board) {
-          return state
-        }
-
-        board.components = []
-
-        return {
-          project,
-          activeBoardId: board.id,
-          wireframe: state.wireframe,
-          ...resetEditingState(),
-          ...previewReset,
-        }
-      }),
-    clearWireframePage: () =>
-      commit((draft) => {
-        if (!draft.project) {
-          return
-        }
-        const board = getActiveBoard(draft.project, draft.activeBoardId)
-        if (!board) {
-          return
-        }
-        board.components = []
-        draft.selectedComponentId = null
-        draft.selectedComponentIds = []
-        draft.pendingComponentType = null
-      }),
-    setWireframePurpose: (purpose) =>
-      set((state) => ({
-        wireframe: {
-          ...state.wireframe,
-          purpose,
-        },
-      })),
     addBoard: () =>
       commit((draft) => {
         if (!draft.project) {
@@ -441,7 +391,6 @@ export const useAppStore = create<StoreState>((set, get) => {
         draft.activeBoardId = board.id
         draft.selectedComponentId = component.id
         draft.selectedComponentIds = [component.id]
-        draft.pendingComponentType = null
       }),
     placeComponent: (type, frame) =>
       commit((draft) => {
@@ -459,7 +408,6 @@ export const useAppStore = create<StoreState>((set, get) => {
         draft.activeBoardId = board.id
         draft.selectedComponentId = component.id
         draft.selectedComponentIds = [component.id]
-        draft.pendingComponentType = null
       }),
     updateComponent: (componentId, updates) =>
       commit((draft) => {
@@ -518,20 +466,6 @@ export const useAppStore = create<StoreState>((set, get) => {
             ),
           )
         }
-      }),
-    clearActiveBoardComponents: () =>
-      commit((draft) => {
-        if (!draft.project) {
-          return
-        }
-        const board = getActiveBoard(draft.project, draft.activeBoardId)
-        if (!board) {
-          return
-        }
-        board.components = []
-        draft.selectedComponentId = null
-        draft.selectedComponentIds = []
-        draft.pendingComponentType = null
       }),
     reorderComponents: (boardId, fromIndex, toIndex) =>
       commit((draft) => {

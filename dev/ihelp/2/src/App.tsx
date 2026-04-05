@@ -1,8 +1,9 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前统一为单一画布工作流，并保留左右栏同时编辑组件与图层
-3. 更新后检查所属 `.folder.md`
+2. 当前统一为单一画布工作流，项目名入口固定在左栏，顶部仅保留设备与动作
+3. Escape 只清当前已选组件，不清待放置组件
+4. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useRef } from 'react'
@@ -35,13 +36,11 @@ export default function App() {
   const activeBoardId = useAppStore((state) => state.activeBoardId)
   const selectedComponentId = useAppStore((state) => state.selectedComponentId)
   const selectedComponentIds = useAppStore((state) => state.selectedComponentIds)
-  const pendingComponentType = useAppStore((state) => state.pendingComponentType)
   const wireframe = useAppStore((state) => state.wireframe)
   const isPreview = useAppStore((state) => state.isPreview)
   const initializeProject = useAppStore((state) => state.initializeProject)
   const importProjectJson = useAppStore((state) => state.importProjectJson)
   const exportProject = useAppStore((state) => state.exportProjectJson)
-  const setProjectName = useAppStore((state) => state.setProjectName)
   const addBoard = useAppStore((state) => state.addBoard)
   const deleteSelectedComponents = useAppStore((state) => state.deleteSelectedComponents)
   const duplicateComponent = useAppStore((state) => state.duplicateComponent)
@@ -50,7 +49,6 @@ export default function App() {
   const getWorkspaceSnapshot = useAppStore((state) => state.getWorkspaceSnapshot)
   const undo = useAppStore((state) => state.undo)
   const redo = useAppStore((state) => state.redo)
-  const setPendingComponentType = useAppStore((state) => state.setPendingComponentType)
   const selectComponent = useAppStore((state) => state.selectComponent)
 
   useEffect(() => {
@@ -103,16 +101,9 @@ export default function App() {
         }
       }
 
-      if (event.key === 'Escape') {
-        if (pendingComponentType) {
-          event.preventDefault()
-          setPendingComponentType(null)
-          return
-        }
-        if (selectedComponentIds.length > 0) {
-          event.preventDefault()
-          selectComponent(null)
-        }
+      if (event.key === 'Escape' && selectedComponentIds.length > 0) {
+        event.preventDefault()
+        selectComponent(null)
       }
 
       if (event.key === 'Backspace' && selectedComponentIds.length > 0) {
@@ -138,13 +129,11 @@ export default function App() {
     duplicateComponent,
     exportProject,
     moveSelectedBy,
-    pendingComponentType,
     project,
     redo,
     selectedComponentId,
     selectedComponentIds.length,
     selectComponent,
-    setPendingComponentType,
     togglePreview,
     undo,
   ])
@@ -165,11 +154,9 @@ export default function App() {
     <>
       <div className="app-shell">
         <Toolbar
-          projectName={project.project}
           deviceLabel={deviceLabel}
           boardSizeLabel={`${project.boardSize.width} × ${project.boardSize.height}`}
           isPreview={isPreview}
-          onProjectNameChange={setProjectName}
           onExport={() => downloadJson(`${project.project || 'wireframe-project'}.json`, JSON.parse(exportProject()))}
           onImport={() => importRef.current?.click()}
           onTogglePreview={togglePreview}
