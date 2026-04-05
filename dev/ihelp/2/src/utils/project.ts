@@ -1,7 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前包含项目导出扩展与最小布局语义派生
+3. 更新后检查所属 `.folder.md`
 */
 
 import {
@@ -18,10 +19,16 @@ import type {
   BoardSize,
   ComponentType,
   DevicePreset,
+  ExportBoard,
+  ExportComponentLayout,
+  ExportProjectData,
   PersistedState,
   ProjectData,
   ProtoComponent,
 } from '../types/schema'
+
+const EXPORT_INSTRUCTION =
+  '请先补充应用类型，再还原这种布局；如项目内无前端内容，请输出 html，并基于这个布局做一个应用原型。'
 
 export function createId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -75,7 +82,20 @@ export function createProject(
 }
 
 export function exportProjectJson(project: ProjectData) {
-  return JSON.stringify(project, null, 2)
+  const exported: ExportProjectData = {
+    ...project,
+    instruction: EXPORT_INSTRUCTION,
+    boards: project.boards.map<ExportBoard>((board) => ({
+      ...board,
+      layout: { axis: 'vertical' },
+      components: board.components.map((component) => ({
+        ...component,
+        layout: getExportComponentLayout(component),
+      })),
+    })),
+  }
+
+  return JSON.stringify(exported, null, 2)
 }
 
 export function createDefaultSettings(): AISettings {
@@ -95,6 +115,18 @@ function getBoardFlowBottom(board: Board) {
 
     return Math.max(max, item.y + item.height)
   }, 0)
+}
+
+function getExportComponentLayout(component: ProtoComponent): ExportComponentLayout {
+  const meta = COMPONENT_META_MAP[component.type]
+
+  return {
+    placement:
+      component.type === 'Modal'
+        ? 'overlay'
+        : meta.anchor ?? (meta.centered ? 'center' : 'flow'),
+    width: meta.fullWidth ? 'full' : 'fixed',
+  }
 }
 
 export function createComponent(
