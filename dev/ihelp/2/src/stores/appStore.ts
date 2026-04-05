@@ -1,18 +1,14 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前把 wireframe 模式状态、双快照切换与编辑命令并入同一 store
-3. 切换 wireframe 时把可空快照收敛为 null，避免恢复类型漂移
+2. 当前把单一 wireframe 工作态、编辑命令与多选状态并入同一 store
+3. 画布始终运行在线框编辑态，不再维护 on/off 双快照切换
 4. 更新后检查所属 `.folder.md`
 */
 
 import { applyPatches, enablePatches, produceWithPatches, type Patch } from 'immer'
 import { create } from 'zustand'
-import {
-  DEFAULT_AI_SETTINGS,
-  DEFAULT_PROJECT_NAME,
-  DEFAULT_WIREFRAME_OPACITY,
-} from '../utils/constants'
+import { DEFAULT_AI_SETTINGS, DEFAULT_PROJECT_NAME } from '../utils/constants'
 import {
   clamp,
   createBoard,
@@ -43,7 +39,6 @@ import type {
   ProtoComponent,
   RestoreTestResult,
   WireframeState,
-  WorkspaceProjectSnapshot,
   WorkspaceSnapshot,
 } from '../types/schema'
 
@@ -55,6 +50,7 @@ type HistoryState = {
   project: ProjectData | null
   activeBoardId: string | null
   selectedComponentId: string | null
+  selectedComponentIds: string[]
   pendingComponentType: ComponentType | null
 }
 
@@ -68,6 +64,7 @@ type StoreState = {
   settings: AISettings
   activeBoardId: string | null
   selectedComponentId: string | null
+  selectedComponentIds: string[]
   editingComponentId: string | null
   pendingComponentType: ComponentType | null
   wireframe: WireframeState
@@ -102,13 +99,12 @@ type StoreState = {
   setProjectName: (name: string) => void
   setActiveBoardId: (boardId: string) => void
   selectComponent: (componentId: string | null) => void
+  selectComponents: (componentIds: string[]) => void
   setEditingComponentId: (componentId: string | null) => void
   setPendingComponentType: (type: ComponentType | null) => void
-  setWireframeMode: (enabled: boolean) => void
   startWireframePage: () => void
   clearWireframePage: () => void
   setWireframePurpose: (purpose: string) => void
-  setWireframeOpacity: (opacity: number) => void
   addBoard: () => void
   deleteBoard: (boardId: string) => void
   reorderBoards: (fromIndex: number, toIndex: number) => void
@@ -122,9 +118,13 @@ type StoreState = {
     componentId: string,
     updates: Partial<Pick<ProtoComponent, 'name' | 'x' | 'y' | 'width' | 'height'>>,
   ) => void
+  updateComponentFrames: (
+    updates: Array<Pick<ProtoComponent, 'id' | 'x' | 'y' | 'width' | 'height'>>,
+  ) => void
   clearActiveBoardComponents: () => void
   reorderComponents: (boardId: string, fromIndex: number, toIndex: number) => void
   deleteComponent: (componentId: string) => void
+  deleteSelectedComponents: () => void
   duplicateComponent: (componentId: string) => void
   addInteraction: (componentId: string) => void
   setInteraction: (
@@ -156,11 +156,7 @@ const previewReset = {
 
 function createDefaultWireframeState(): WireframeState {
   return {
-    enabled: false,
     purpose: '',
-    opacity: DEFAULT_WIREFRAME_OPACITY,
-    exploreSnapshot: null,
-    designSnapshot: null,
   }
 }
 
@@ -168,43 +164,10 @@ function cloneProject(project: ProjectData | null) {
   return project ? parseProjectJson(JSON.stringify(project)) : null
 }
 
-function captureProjectSnapshot(state: Pick<StoreState, 'project' | 'activeBoardId'>): WorkspaceProjectSnapshot {
-  return {
-    project: cloneProject(state.project),
-    activeBoardId: state.activeBoardId,
-  }
-}
-
-function cloneProjectSnapshot(snapshot: WorkspaceProjectSnapshot | null): WorkspaceProjectSnapshot | null {
-  if (!snapshot) {
-    return null
-  }
-
-  return {
-    project: cloneProject(snapshot.project),
-    activeBoardId: snapshot.activeBoardId,
-  }
-}
-
-function captureWireframeState(state: Pick<StoreState, 'project' | 'activeBoardId' | 'wireframe'>) {
-  if (state.wireframe.enabled) {
-    return {
-      ...state.wireframe,
-      designSnapshot: captureProjectSnapshot(state),
-      exploreSnapshot: cloneProjectSnapshot(state.wireframe.exploreSnapshot),
-    }
-  }
-
-  return {
-    ...state.wireframe,
-    designSnapshot: cloneProjectSnapshot(state.wireframe.designSnapshot),
-    exploreSnapshot: cloneProjectSnapshot(state.wireframe.exploreSnapshot),
-  }
-}
-
 function resetEditingState() {
   return {
     selectedComponentId: null,
+    selectedComponentIds: [] as string[],
     editingComponentId: null,
     pendingComponentType: null as ComponentType | null,
   }
@@ -215,12 +178,19 @@ function getHistoryState(state: StoreState): HistoryState {
     project: state.project,
     activeBoardId: state.activeBoardId,
     selectedComponentId: state.selectedComponentId,
+    selectedComponentIds: state.selectedComponentIds,
     pendingComponentType: state.pendingComponentType,
   }
 }
 
 function getActiveBoard(project: ProjectData, activeBoardId: string | null) {
   return (activeBoardId ? getBoardById(project, activeBoardId) : null) ?? project.boards[0] ?? null
+}
+
+function getSelectedComponents(project: ProjectData, componentIds: string[]) {
+  return componentIds
+    .map((componentId) => findComponentById(project, componentId))
+    .filter((found): found is NonNullable<typeof found> => Boolean(found))
 }
 
 function defaultInteraction(project: ProjectData, componentId: string): Interaction {
@@ -249,6 +219,7 @@ export const useAppStore = create<StoreState>((set, get) => {
       project: next.project,
       activeBoardId: next.activeBoardId,
       selectedComponentId: next.selectedComponentId,
+      selectedComponentIds: next.selectedComponentIds,
       pendingComponentType: next.pendingComponentType,
       editingComponentId: null,
       ...previewReset,
@@ -264,6 +235,7 @@ export const useAppStore = create<StoreState>((set, get) => {
     settings: persisted?.settings ?? DEFAULT_AI_SETTINGS,
     activeBoardId: persisted?.activeBoardId ?? null,
     selectedComponentId: null,
+    selectedComponentIds: [],
     editingComponentId: null,
     pendingComponentType: null,
     wireframe: persisted?.wireframe ?? createDefaultWireframeState(),
@@ -301,7 +273,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         project: state.project,
         settings: state.settings,
         activeBoardId: state.activeBoardId,
-        wireframe: captureWireframeState(state),
+        wireframe: state.wireframe,
       }
     },
     initializeProject: (projectName, device, boardSize) => {
@@ -347,51 +319,24 @@ export const useAppStore = create<StoreState>((set, get) => {
         ...resetEditingState(),
         ...(state.isPreview ? previewReset : {}),
       })),
-    selectComponent: (selectedComponentId) => set({ selectedComponentId }),
+    selectComponent: (selectedComponentId) =>
+      set({
+        selectedComponentId,
+        selectedComponentIds: selectedComponentId ? [selectedComponentId] : [],
+      }),
+    selectComponents: (selectedComponentIds) =>
+      set({
+        selectedComponentId: selectedComponentIds.at(-1) ?? null,
+        selectedComponentIds,
+        editingComponentId: null,
+      }),
     setEditingComponentId: (editingComponentId) => set({ editingComponentId }),
     setPendingComponentType: (pendingComponentType) =>
-      set({ pendingComponentType, selectedComponentId: null, editingComponentId: null }),
-    setWireframeMode: (enabled) =>
-      set((state) => {
-        if (!state.project || state.wireframe.enabled === enabled) {
-          return state
-        }
-
-        if (enabled) {
-          const exploreSnapshot =
-            cloneProjectSnapshot(state.wireframe.exploreSnapshot) ?? captureProjectSnapshot(state)
-          const designSnapshot =
-            cloneProjectSnapshot(state.wireframe.designSnapshot) ?? captureProjectSnapshot(state)
-
-          return {
-            project: cloneProject(designSnapshot.project) ?? state.project,
-            activeBoardId: designSnapshot.activeBoardId ?? state.activeBoardId,
-            wireframe: {
-              ...state.wireframe,
-              enabled: true,
-              exploreSnapshot,
-              designSnapshot,
-            },
-            ...resetEditingState(),
-            ...previewReset,
-          }
-        }
-
-        const exploreSnapshot = cloneProjectSnapshot(state.wireframe.exploreSnapshot)
-        const designSnapshot = captureProjectSnapshot(state)
-
-        return {
-          project: cloneProject(exploreSnapshot?.project ?? null) ?? state.project,
-          activeBoardId: exploreSnapshot?.activeBoardId ?? state.activeBoardId,
-          wireframe: {
-            ...state.wireframe,
-            enabled: false,
-            designSnapshot,
-            exploreSnapshot,
-          },
-          ...resetEditingState(),
-          ...previewReset,
-        }
+      set({
+        pendingComponentType,
+        selectedComponentId: null,
+        selectedComponentIds: [],
+        editingComponentId: null,
       }),
     startWireframePage: () =>
       set((state) => {
@@ -399,8 +344,6 @@ export const useAppStore = create<StoreState>((set, get) => {
           return state
         }
 
-        const exploreSnapshot =
-          cloneProjectSnapshot(state.wireframe.exploreSnapshot) ?? captureProjectSnapshot(state)
         const project = cloneProject(state.project)
         const activeBoardId = state.activeBoardId ?? project?.boards[0]?.id ?? null
         const board = project && activeBoardId ? getBoardById(project, activeBoardId) : project?.boards[0] ?? null
@@ -414,15 +357,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         return {
           project,
           activeBoardId: board.id,
-          wireframe: {
-            ...state.wireframe,
-            enabled: true,
-            exploreSnapshot,
-            designSnapshot: {
-              project: cloneProject(project),
-              activeBoardId: board.id,
-            },
-          },
+          wireframe: state.wireframe,
           ...resetEditingState(),
           ...previewReset,
         }
@@ -438,6 +373,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         }
         board.components = []
         draft.selectedComponentId = null
+        draft.selectedComponentIds = []
         draft.pendingComponentType = null
       }),
     setWireframePurpose: (purpose) =>
@@ -445,13 +381,6 @@ export const useAppStore = create<StoreState>((set, get) => {
         wireframe: {
           ...state.wireframe,
           purpose,
-        },
-      })),
-    setWireframeOpacity: (opacity) =>
-      set((state) => ({
-        wireframe: {
-          ...state.wireframe,
-          opacity: Math.min(Math.max(opacity, 0), 1),
         },
       })),
     addBoard: () =>
@@ -463,6 +392,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         draft.project.boards.push(board)
         draft.activeBoardId = board.id
         draft.selectedComponentId = null
+        draft.selectedComponentIds = []
       }),
     deleteBoard: (boardId) =>
       commit((draft) => {
@@ -477,6 +407,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         draft.activeBoardId =
           draft.project.boards[Math.max(0, index - 1)]?.id ?? draft.project.boards[0]?.id ?? null
         draft.selectedComponentId = null
+        draft.selectedComponentIds = []
       }),
     reorderBoards: (fromIndex, toIndex) =>
       commit((draft) => {
@@ -509,6 +440,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         board.components.push(component)
         draft.activeBoardId = board.id
         draft.selectedComponentId = component.id
+        draft.selectedComponentIds = [component.id]
         draft.pendingComponentType = null
       }),
     placeComponent: (type, frame) =>
@@ -526,6 +458,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         board.components.push(component)
         draft.activeBoardId = board.id
         draft.selectedComponentId = component.id
+        draft.selectedComponentIds = [component.id]
         draft.pendingComponentType = null
       }),
     updateComponent: (componentId, updates) =>
@@ -559,6 +492,33 @@ export const useAppStore = create<StoreState>((set, get) => {
           Object.assign(found.component, frame)
         }
       }),
+    updateComponentFrames: (updates) =>
+      commit((draft) => {
+        if (!draft.project || updates.length === 0) {
+          return
+        }
+
+        for (const item of updates) {
+          const found = findComponentById(draft.project, item.id)
+          if (!found) {
+            continue
+          }
+
+          Object.assign(
+            found.component,
+            normalizeComponentFrame(
+              found.component.type,
+              {
+                x: item.x,
+                y: item.y,
+                width: item.width,
+                height: item.height,
+              },
+              draft.project.boardSize,
+            ),
+          )
+        }
+      }),
     clearActiveBoardComponents: () =>
       commit((draft) => {
         if (!draft.project) {
@@ -570,6 +530,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         }
         board.components = []
         draft.selectedComponentId = null
+        draft.selectedComponentIds = []
         draft.pendingComponentType = null
       }),
     reorderComponents: (boardId, fromIndex, toIndex) =>
@@ -593,9 +554,28 @@ export const useAppStore = create<StoreState>((set, get) => {
           return
         }
         found.board.components.splice(found.index, 1)
-        if (draft.selectedComponentId === componentId) {
+        if (
+          draft.selectedComponentId === componentId ||
+          draft.selectedComponentIds.includes(componentId)
+        ) {
           draft.selectedComponentId = null
+          draft.selectedComponentIds = []
         }
+      }),
+    deleteSelectedComponents: () =>
+      commit((draft) => {
+        if (!draft.project || draft.selectedComponentIds.length === 0) {
+          return
+        }
+
+        for (const board of draft.project.boards) {
+          board.components = board.components.filter(
+            (component) => !draft.selectedComponentIds.includes(component.id),
+          )
+        }
+
+        draft.selectedComponentId = null
+        draft.selectedComponentIds = []
       }),
     duplicateComponent: (componentId) =>
       commit((draft) => {
@@ -609,6 +589,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         const copy = duplicateComponent(found.component, draft.project.boardSize)
         found.board.components.push(copy)
         draft.selectedComponentId = copy.id
+        draft.selectedComponentIds = [copy.id]
       }),
     addInteraction: (componentId) =>
       commit((draft) => {
@@ -650,24 +631,35 @@ export const useAppStore = create<StoreState>((set, get) => {
       }),
     moveSelectedBy: (deltaX, deltaY) =>
       commit((draft) => {
-        if (!draft.project || !draft.selectedComponentId) {
+        if (!draft.project || draft.selectedComponentIds.length === 0) {
           return
         }
-        const found = findComponentById(draft.project, draft.selectedComponentId)
-        if (!found) {
+
+        const selected = getSelectedComponents(draft.project, draft.selectedComponentIds)
+        if (selected.length === 0) {
           return
         }
-        found.component.x = clamp(
-          snap(found.component.x + deltaX),
-          0,
-          draft.project.boardSize.width - found.component.width,
-        )
-        found.component.y = clamp(
-          snap(found.component.y + deltaY),
-          0,
-          draft.project.boardSize.height - found.component.height,
-        )
-        Object.assign(found.component, normalizeComponent(found.component, draft.project.boardSize))
+
+        const minX = Math.min(...selected.map(({ component }) => component.x))
+        const minY = Math.min(...selected.map(({ component }) => component.y))
+        const maxX = Math.max(...selected.map(({ component }) => component.x + component.width))
+        const maxY = Math.max(...selected.map(({ component }) => component.y + component.height))
+        const boundedDeltaX = clamp(deltaX, -minX, draft.project.boardSize.width - maxX)
+        const boundedDeltaY = clamp(deltaY, -minY, draft.project.boardSize.height - maxY)
+
+        for (const { component } of selected) {
+          component.x = clamp(
+            snap(component.x + boundedDeltaX),
+            0,
+            draft.project.boardSize.width - component.width,
+          )
+          component.y = clamp(
+            snap(component.y + boundedDeltaY),
+            0,
+            draft.project.boardSize.height - component.height,
+          )
+          Object.assign(component, normalizeComponent(component, draft.project.boardSize))
+        }
       }),
     togglePreview: () => {
       const state = get()
@@ -724,6 +716,7 @@ export const useAppStore = create<StoreState>((set, get) => {
           draft.project = project
           draft.activeBoardId = project.boards[0]?.id ?? null
           draft.selectedComponentId = null
+          draft.selectedComponentIds = []
           return
         }
         draft.project.project = project.project
@@ -732,6 +725,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         draft.project.boards = project.boards
         draft.activeBoardId = project.boards[0]?.id ?? null
         draft.selectedComponentId = null
+        draft.selectedComponentIds = []
       }),
     exportProjectJson: () => {
       const project = get().project

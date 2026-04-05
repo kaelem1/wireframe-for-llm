@@ -1,7 +1,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前接入 wireframe mode 主链路，并在该模式下收窄右栏工作流
+2. 当前统一为单一画布工作流，并保留左右栏同时编辑组件与图层
 3. 更新后检查所属 `.folder.md`
 */
 
@@ -34,6 +34,7 @@ export default function App() {
   const settings = useAppStore((state) => state.settings)
   const activeBoardId = useAppStore((state) => state.activeBoardId)
   const selectedComponentId = useAppStore((state) => state.selectedComponentId)
+  const selectedComponentIds = useAppStore((state) => state.selectedComponentIds)
   const pendingComponentType = useAppStore((state) => state.pendingComponentType)
   const wireframe = useAppStore((state) => state.wireframe)
   const isPreview = useAppStore((state) => state.isPreview)
@@ -42,7 +43,7 @@ export default function App() {
   const exportProject = useAppStore((state) => state.exportProjectJson)
   const setProjectName = useAppStore((state) => state.setProjectName)
   const addBoard = useAppStore((state) => state.addBoard)
-  const deleteComponent = useAppStore((state) => state.deleteComponent)
+  const deleteSelectedComponents = useAppStore((state) => state.deleteSelectedComponents)
   const duplicateComponent = useAppStore((state) => state.duplicateComponent)
   const moveSelectedBy = useAppStore((state) => state.moveSelectedBy)
   const togglePreview = useAppStore((state) => state.togglePreview)
@@ -51,7 +52,6 @@ export default function App() {
   const redo = useAppStore((state) => state.redo)
   const setPendingComponentType = useAppStore((state) => state.setPendingComponentType)
   const selectComponent = useAppStore((state) => state.selectComponent)
-  const setWireframeMode = useAppStore((state) => state.setWireframeMode)
 
   useEffect(() => {
     if (!project) {
@@ -84,11 +84,6 @@ export default function App() {
         return
       }
 
-      if (!meta && event.key.toLowerCase() === 'l' && project) {
-        event.preventDefault()
-        setWireframeMode(!wireframe.enabled)
-      }
-
       if (meta && event.key.toLowerCase() === 'd' && selectedComponentId) {
         event.preventDefault()
         duplicateComponent(selectedComponentId)
@@ -114,18 +109,18 @@ export default function App() {
           setPendingComponentType(null)
           return
         }
-        if (selectedComponentId) {
+        if (selectedComponentIds.length > 0) {
           event.preventDefault()
           selectComponent(null)
         }
       }
 
-      if (event.key === 'Backspace' && selectedComponentId) {
+      if (event.key === 'Backspace' && selectedComponentIds.length > 0) {
         event.preventDefault()
-        deleteComponent(selectedComponentId)
+        deleteSelectedComponents()
       }
 
-      if (selectedComponentId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+      if (selectedComponentIds.length > 0 && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
         event.preventDefault()
         const step = event.shiftKey ? 8 : 1
         if (event.key === 'ArrowUp') moveSelectedBy(0, -step)
@@ -139,7 +134,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [
     addBoard,
-    deleteComponent,
+    deleteSelectedComponents,
     duplicateComponent,
     exportProject,
     moveSelectedBy,
@@ -147,12 +142,11 @@ export default function App() {
     project,
     redo,
     selectedComponentId,
+    selectedComponentIds.length,
     selectComponent,
     setPendingComponentType,
-    setWireframeMode,
     togglePreview,
     undo,
-    wireframe.enabled,
   ])
 
   if (!project) {
@@ -169,15 +163,11 @@ export default function App() {
 
   return (
     <>
-      <div className={wireframe.enabled ? 'app-shell is-wireframe-mode' : 'app-shell'}>
+      <div className="app-shell">
         <Toolbar
           projectName={project.project}
-          deviceLabel={wireframe.enabled ? 'Layout mode' : deviceLabel}
-          boardSizeLabel={
-            wireframe.enabled
-              ? `Wireframe · ${project.boardSize.width} × ${project.boardSize.height}`
-              : `${project.boardSize.width} × ${project.boardSize.height}`
-          }
+          deviceLabel={deviceLabel}
+          boardSizeLabel={`${project.boardSize.width} × ${project.boardSize.height}`}
           isPreview={isPreview}
           onProjectNameChange={setProjectName}
           onExport={() => downloadJson(`${project.project || 'wireframe-project'}.json`, JSON.parse(exportProject()))}
@@ -185,7 +175,7 @@ export default function App() {
           onTogglePreview={togglePreview}
         />
 
-        <div className={wireframe.enabled ? 'workspace workspace--wireframe' : 'workspace'}>
+        <div className="workspace">
           <aside className="workspace__sidebar workspace__sidebar--left">
             <ComponentPalette />
           </aside>
@@ -194,11 +184,9 @@ export default function App() {
             <BoardCanvas />
           </main>
 
-          {!wireframe.enabled ? (
-            <aside className="workspace__sidebar workspace__sidebar--right">
-              <InteractionPanel />
-            </aside>
-          ) : null}
+          <aside className="workspace__sidebar workspace__sidebar--right">
+            <InteractionPanel />
+          </aside>
         </div>
 
         <BoardStrip />

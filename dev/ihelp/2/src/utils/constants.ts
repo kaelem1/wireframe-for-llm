@@ -1,7 +1,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前补齐了参考仓 wireframe 组件注册表，并兼容旧 PascalCase 组件键
+2. 当前补齐了参考仓 wireframe 组件注册表，并移除独立 wireframe 模式参数
 3. 更新后检查所属 `.folder.md`
 */
 
@@ -86,8 +86,6 @@ export const PLACEMENT_DRAG_THRESHOLD = 4
 export const DEFAULT_AI_BASE_URL = 'https://api.siliconflow.cn/v1'
 export const DEFAULT_AI_MODEL = 'zai-org/GLM-4.6'
 export const DEFAULT_PROJECT_NAME = '我的应用'
-export const DEFAULT_WIREFRAME_OPACITY = 0.35
-
 export const DEVICE_OPTIONS: DeviceOption[] = [
   { id: 'iPhone', label: 'iPhone', size: { width: 390, height: 844 } },
   { id: 'Android', label: 'Android', size: { width: 412, height: 915 } },
