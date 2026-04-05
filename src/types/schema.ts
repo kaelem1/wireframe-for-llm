@@ -1,7 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前包含运行态项目结构与导出 JSON 扩展类型
+3. 更新后检查所属 `.folder.md`
 */
 
 export type DevicePreset = 'iPhone' | 'Android' | 'iPad' | 'Desktop' | 'Custom'
@@ -60,6 +61,29 @@ export interface ProjectData {
   device: DevicePreset
   boardSize: BoardSize
   boards: Board[]
+}
+
+export interface ExportBoardLayout {
+  axis: 'vertical'
+}
+
+export interface ExportComponentLayout {
+  placement: 'top' | 'bottom' | 'flow' | 'center' | 'overlay'
+  width: 'full' | 'fixed'
+}
+
+export interface ExportComponent extends ProtoComponent {
+  layout: ExportComponentLayout
+}
+
+export interface ExportBoard extends Omit<Board, 'components'> {
+  layout: ExportBoardLayout
+  components: ExportComponent[]
+}
+
+export interface ExportProjectData extends Omit<ProjectData, 'boards'> {
+  instruction: string
+  boards: ExportBoard[]
 }
 
 export interface AISettings {
