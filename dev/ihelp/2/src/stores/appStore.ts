@@ -1,8 +1,9 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前包含待放置组件状态、画板名防重与预览状态
-3. 更新后检查所属 `.folder.md`
+2. 当前把 wireframe 模式状态、双快照切换与编辑命令并入同一 store
+3. 切换 wireframe 时把可空快照收敛为 null，避免恢复类型漂移
+4. 更新后检查所属 `.folder.md`
 */
 
 import { applyPatches, enablePatches, produceWithPatches, type Patch } from 'immer'
@@ -10,6 +11,7 @@ import { create } from 'zustand'
 import {
   DEFAULT_AI_SETTINGS,
   DEFAULT_PROJECT_NAME,
+  DEFAULT_WIREFRAME_OPACITY,
 } from '../utils/constants'
 import {
   clamp,
@@ -23,13 +25,13 @@ import {
   getBoardById,
   getNextBoardName,
   getPlacedComponentFrame,
-  loadPersistedState,
   normalizeComponent,
   normalizeComponentFrame,
   parseProjectJson,
   reorderList,
   snap,
 } from '../utils/project'
+import { loadWorkspaceSnapshot } from '../utils/storage'
 import type {
   AISettings,
   BoardSize,
@@ -40,6 +42,8 @@ import type {
   ProjectData,
   ProtoComponent,
   RestoreTestResult,
+  WireframeState,
+  WorkspaceProjectSnapshot,
   WorkspaceSnapshot,
 } from '../types/schema'
 
@@ -66,6 +70,7 @@ type StoreState = {
   selectedComponentId: string | null
   editingComponentId: string | null
   pendingComponentType: ComponentType | null
+  wireframe: WireframeState
   isPreview: boolean
   previewBoardStack: string[]
   previewModalId: string | null
@@ -99,6 +104,11 @@ type StoreState = {
   selectComponent: (componentId: string | null) => void
   setEditingComponentId: (componentId: string | null) => void
   setPendingComponentType: (type: ComponentType | null) => void
+  setWireframeMode: (enabled: boolean) => void
+  startWireframePage: () => void
+  clearWireframePage: () => void
+  setWireframePurpose: (purpose: string) => void
+  setWireframeOpacity: (opacity: number) => void
   addBoard: () => void
   deleteBoard: (boardId: string) => void
   reorderBoards: (fromIndex: number, toIndex: number) => void
@@ -112,6 +122,7 @@ type StoreState = {
     componentId: string,
     updates: Partial<Pick<ProtoComponent, 'name' | 'x' | 'y' | 'width' | 'height'>>,
   ) => void
+  clearActiveBoardComponents: () => void
   reorderComponents: (boardId: string, fromIndex: number, toIndex: number) => void
   deleteComponent: (componentId: string) => void
   duplicateComponent: (componentId: string) => void
@@ -135,12 +146,68 @@ type StoreState = {
   redo: () => void
 }
 
-const persisted = loadPersistedState()
+const persisted = loadWorkspaceSnapshot()
 const previewReset = {
   isPreview: false,
   previewBoardStack: [] as string[],
   previewModalId: null,
   previewDirection: null as PreviewDirection,
+}
+
+function createDefaultWireframeState(): WireframeState {
+  return {
+    enabled: false,
+    purpose: '',
+    opacity: DEFAULT_WIREFRAME_OPACITY,
+    exploreSnapshot: null,
+    designSnapshot: null,
+  }
+}
+
+function cloneProject(project: ProjectData | null) {
+  return project ? parseProjectJson(JSON.stringify(project)) : null
+}
+
+function captureProjectSnapshot(state: Pick<StoreState, 'project' | 'activeBoardId'>): WorkspaceProjectSnapshot {
+  return {
+    project: cloneProject(state.project),
+    activeBoardId: state.activeBoardId,
+  }
+}
+
+function cloneProjectSnapshot(snapshot: WorkspaceProjectSnapshot | null): WorkspaceProjectSnapshot | null {
+  if (!snapshot) {
+    return null
+  }
+
+  return {
+    project: cloneProject(snapshot.project),
+    activeBoardId: snapshot.activeBoardId,
+  }
+}
+
+function captureWireframeState(state: Pick<StoreState, 'project' | 'activeBoardId' | 'wireframe'>) {
+  if (state.wireframe.enabled) {
+    return {
+      ...state.wireframe,
+      designSnapshot: captureProjectSnapshot(state),
+      exploreSnapshot: cloneProjectSnapshot(state.wireframe.exploreSnapshot),
+    }
+  }
+
+  return {
+    ...state.wireframe,
+    designSnapshot: cloneProjectSnapshot(state.wireframe.designSnapshot),
+    exploreSnapshot: cloneProjectSnapshot(state.wireframe.exploreSnapshot),
+  }
+}
+
+function resetEditingState() {
+  return {
+    selectedComponentId: null,
+    editingComponentId: null,
+    pendingComponentType: null as ComponentType | null,
+  }
 }
 
 function getHistoryState(state: StoreState): HistoryState {
@@ -195,10 +262,11 @@ export const useAppStore = create<StoreState>((set, get) => {
   return {
     project: persisted?.project ?? null,
     settings: persisted?.settings ?? DEFAULT_AI_SETTINGS,
-    activeBoardId: persisted?.currentBoardId ?? null,
-    selectedComponentId: persisted?.selectedComponentId ?? null,
+    activeBoardId: persisted?.activeBoardId ?? null,
+    selectedComponentId: null,
     editingComponentId: null,
     pendingComponentType: null,
+    wireframe: persisted?.wireframe ?? createDefaultWireframeState(),
     ...previewReset,
     restoreTestResult: {
       status: 'idle',
@@ -222,9 +290,8 @@ export const useAppStore = create<StoreState>((set, get) => {
         project: snapshot?.project ?? null,
         settings: snapshot?.settings ?? DEFAULT_AI_SETTINGS,
         activeBoardId: snapshot?.activeBoardId ?? snapshot?.project?.boards[0]?.id ?? null,
-        selectedComponentId: null,
-        editingComponentId: null,
-        pendingComponentType: null,
+        wireframe: snapshot?.wireframe ?? createDefaultWireframeState(),
+        ...resetEditingState(),
         history: { past: [], future: [] },
         ...previewReset,
       }),
@@ -234,6 +301,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         project: state.project,
         settings: state.settings,
         activeBoardId: state.activeBoardId,
+        wireframe: captureWireframeState(state),
       }
     },
     initializeProject: (projectName, device, boardSize) => {
@@ -241,9 +309,8 @@ export const useAppStore = create<StoreState>((set, get) => {
       set({
         project,
         activeBoardId: project.boards[0]?.id ?? null,
-        selectedComponentId: null,
-        editingComponentId: null,
-        pendingComponentType: null,
+        wireframe: createDefaultWireframeState(),
+        ...resetEditingState(),
         history: { past: [], future: [] },
         generation: { status: 'idle', error: null },
         restoreTestResult: { status: 'idle', code: '', html: '', error: null },
@@ -254,9 +321,8 @@ export const useAppStore = create<StoreState>((set, get) => {
       set({
         project,
         activeBoardId: project.boards[0]?.id ?? null,
-        selectedComponentId: null,
-        editingComponentId: null,
-        pendingComponentType: null,
+        wireframe: createDefaultWireframeState(),
+        ...resetEditingState(),
         history: { past: [], future: [] },
         generation: { status: 'idle', error: null },
         restoreTestResult: { status: 'idle', code: '', html: '', error: null },
@@ -278,15 +344,116 @@ export const useAppStore = create<StoreState>((set, get) => {
     setActiveBoardId: (boardId) =>
       set((state) => ({
         activeBoardId: boardId,
-        selectedComponentId: null,
-        editingComponentId: null,
-        pendingComponentType: null,
+        ...resetEditingState(),
         ...(state.isPreview ? previewReset : {}),
       })),
     selectComponent: (selectedComponentId) => set({ selectedComponentId }),
     setEditingComponentId: (editingComponentId) => set({ editingComponentId }),
     setPendingComponentType: (pendingComponentType) =>
       set({ pendingComponentType, selectedComponentId: null, editingComponentId: null }),
+    setWireframeMode: (enabled) =>
+      set((state) => {
+        if (!state.project || state.wireframe.enabled === enabled) {
+          return state
+        }
+
+        if (enabled) {
+          const exploreSnapshot =
+            cloneProjectSnapshot(state.wireframe.exploreSnapshot) ?? captureProjectSnapshot(state)
+          const designSnapshot =
+            cloneProjectSnapshot(state.wireframe.designSnapshot) ?? captureProjectSnapshot(state)
+
+          return {
+            project: cloneProject(designSnapshot.project) ?? state.project,
+            activeBoardId: designSnapshot.activeBoardId ?? state.activeBoardId,
+            wireframe: {
+              ...state.wireframe,
+              enabled: true,
+              exploreSnapshot,
+              designSnapshot,
+            },
+            ...resetEditingState(),
+            ...previewReset,
+          }
+        }
+
+        const exploreSnapshot = cloneProjectSnapshot(state.wireframe.exploreSnapshot)
+        const designSnapshot = captureProjectSnapshot(state)
+
+        return {
+          project: cloneProject(exploreSnapshot?.project ?? null) ?? state.project,
+          activeBoardId: exploreSnapshot?.activeBoardId ?? state.activeBoardId,
+          wireframe: {
+            ...state.wireframe,
+            enabled: false,
+            designSnapshot,
+            exploreSnapshot,
+          },
+          ...resetEditingState(),
+          ...previewReset,
+        }
+      }),
+    startWireframePage: () =>
+      set((state) => {
+        if (!state.project) {
+          return state
+        }
+
+        const exploreSnapshot =
+          cloneProjectSnapshot(state.wireframe.exploreSnapshot) ?? captureProjectSnapshot(state)
+        const project = cloneProject(state.project)
+        const activeBoardId = state.activeBoardId ?? project?.boards[0]?.id ?? null
+        const board = project && activeBoardId ? getBoardById(project, activeBoardId) : project?.boards[0] ?? null
+
+        if (!project || !board) {
+          return state
+        }
+
+        board.components = []
+
+        return {
+          project,
+          activeBoardId: board.id,
+          wireframe: {
+            ...state.wireframe,
+            enabled: true,
+            exploreSnapshot,
+            designSnapshot: {
+              project: cloneProject(project),
+              activeBoardId: board.id,
+            },
+          },
+          ...resetEditingState(),
+          ...previewReset,
+        }
+      }),
+    clearWireframePage: () =>
+      commit((draft) => {
+        if (!draft.project) {
+          return
+        }
+        const board = getActiveBoard(draft.project, draft.activeBoardId)
+        if (!board) {
+          return
+        }
+        board.components = []
+        draft.selectedComponentId = null
+        draft.pendingComponentType = null
+      }),
+    setWireframePurpose: (purpose) =>
+      set((state) => ({
+        wireframe: {
+          ...state.wireframe,
+          purpose,
+        },
+      })),
+    setWireframeOpacity: (opacity) =>
+      set((state) => ({
+        wireframe: {
+          ...state.wireframe,
+          opacity: Math.min(Math.max(opacity, 0), 1),
+        },
+      })),
     addBoard: () =>
       commit((draft) => {
         if (!draft.project) {
@@ -299,10 +466,7 @@ export const useAppStore = create<StoreState>((set, get) => {
       }),
     deleteBoard: (boardId) =>
       commit((draft) => {
-        if (!draft.project) {
-          return
-        }
-        if (draft.project.boards.length === 1) {
+        if (!draft.project || draft.project.boards.length === 1) {
           return
         }
         const index = draft.project.boards.findIndex((board) => board.id === boardId)
@@ -328,10 +492,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         }
         const board = getBoardById(draft.project, boardId)
         const nextName = name || '未命名画板'
-        if (
-          board &&
-          !draft.project.boards.some((item) => item.id !== boardId && item.name === nextName)
-        ) {
+        if (board && !draft.project.boards.some((item) => item.id !== boardId && item.name === nextName)) {
           board.name = nextName
         }
       }),
@@ -397,6 +558,19 @@ export const useAppStore = create<StoreState>((set, get) => {
           )
           Object.assign(found.component, frame)
         }
+      }),
+    clearActiveBoardComponents: () =>
+      commit((draft) => {
+        if (!draft.project) {
+          return
+        }
+        const board = getActiveBoard(draft.project, draft.activeBoardId)
+        if (!board) {
+          return
+        }
+        board.components = []
+        draft.selectedComponentId = null
+        draft.pendingComponentType = null
       }),
     reorderComponents: (boardId, fromIndex, toIndex) =>
       commit((draft) => {

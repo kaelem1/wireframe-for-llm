@@ -1,1 +1,1 @@
-本轮仅做收口：复核本次改动文件的 `PROTOCOL` 头均已存在，无需补写；未新增长期决策。浏览器验收沿用上一轮结果：Desktop 1440×900 默认 56%，整板完整可见。
+已接入 agentation 式 wireframe mode：L 切换、分组组件目录、purpose/opacity、空白画布点击/拖拽放置；build 通过，agent-browser 已验到页面加载与模式切换。

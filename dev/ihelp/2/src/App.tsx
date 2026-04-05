@@ -1,7 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前接入 wireframe mode 主链路，并在该模式下收窄右栏工作流
+3. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useRef } from 'react'
@@ -33,6 +34,8 @@ export default function App() {
   const settings = useAppStore((state) => state.settings)
   const activeBoardId = useAppStore((state) => state.activeBoardId)
   const selectedComponentId = useAppStore((state) => state.selectedComponentId)
+  const pendingComponentType = useAppStore((state) => state.pendingComponentType)
+  const wireframe = useAppStore((state) => state.wireframe)
   const isPreview = useAppStore((state) => state.isPreview)
   const initializeProject = useAppStore((state) => state.initializeProject)
   const importProjectJson = useAppStore((state) => state.importProjectJson)
@@ -46,6 +49,9 @@ export default function App() {
   const getWorkspaceSnapshot = useAppStore((state) => state.getWorkspaceSnapshot)
   const undo = useAppStore((state) => state.undo)
   const redo = useAppStore((state) => state.redo)
+  const setPendingComponentType = useAppStore((state) => state.setPendingComponentType)
+  const selectComponent = useAppStore((state) => state.selectComponent)
+  const setWireframeMode = useAppStore((state) => state.setWireframeMode)
 
   useEffect(() => {
     if (!project) {
@@ -53,7 +59,7 @@ export default function App() {
     }
 
     saveSnapshot(getWorkspaceSnapshot())
-  }, [project, settings, activeBoardId, getWorkspaceSnapshot])
+  }, [project, settings, activeBoardId, wireframe, getWorkspaceSnapshot])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -78,6 +84,11 @@ export default function App() {
         return
       }
 
+      if (!meta && event.key.toLowerCase() === 'l' && project) {
+        event.preventDefault()
+        setWireframeMode(!wireframe.enabled)
+      }
+
       if (meta && event.key.toLowerCase() === 'd' && selectedComponentId) {
         event.preventDefault()
         duplicateComponent(selectedComponentId)
@@ -94,6 +105,18 @@ export default function App() {
           redo()
         } else {
           undo()
+        }
+      }
+
+      if (event.key === 'Escape') {
+        if (pendingComponentType) {
+          event.preventDefault()
+          setPendingComponentType(null)
+          return
+        }
+        if (selectedComponentId) {
+          event.preventDefault()
+          selectComponent(null)
         }
       }
 
@@ -120,11 +143,16 @@ export default function App() {
     duplicateComponent,
     exportProject,
     moveSelectedBy,
+    pendingComponentType,
     project,
     redo,
     selectedComponentId,
+    selectComponent,
+    setPendingComponentType,
+    setWireframeMode,
     togglePreview,
     undo,
+    wireframe.enabled,
   ])
 
   if (!project) {
@@ -141,11 +169,15 @@ export default function App() {
 
   return (
     <>
-      <div className="app-shell">
+      <div className={wireframe.enabled ? 'app-shell is-wireframe-mode' : 'app-shell'}>
         <Toolbar
           projectName={project.project}
-          deviceLabel={deviceLabel}
-          boardSizeLabel={`${project.boardSize.width} × ${project.boardSize.height}`}
+          deviceLabel={wireframe.enabled ? 'Layout mode' : deviceLabel}
+          boardSizeLabel={
+            wireframe.enabled
+              ? `Wireframe · ${project.boardSize.width} × ${project.boardSize.height}`
+              : `${project.boardSize.width} × ${project.boardSize.height}`
+          }
           isPreview={isPreview}
           onProjectNameChange={setProjectName}
           onExport={() => downloadJson(`${project.project || 'wireframe-project'}.json`, JSON.parse(exportProject()))}
@@ -153,7 +185,7 @@ export default function App() {
           onTogglePreview={togglePreview}
         />
 
-        <div className="workspace">
+        <div className={wireframe.enabled ? 'workspace workspace--wireframe' : 'workspace'}>
           <aside className="workspace__sidebar workspace__sidebar--left">
             <ComponentPalette />
           </aside>
@@ -162,9 +194,11 @@ export default function App() {
             <BoardCanvas />
           </main>
 
-          <aside className="workspace__sidebar workspace__sidebar--right">
-            <InteractionPanel />
-          </aside>
+          {!wireframe.enabled ? (
+            <aside className="workspace__sidebar workspace__sidebar--right">
+              <InteractionPanel />
+            </aside>
+          ) : null}
         </div>
 
         <BoardStrip />

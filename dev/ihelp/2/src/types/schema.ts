@@ -1,7 +1,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前包含运行态项目结构与导出 JSON 扩展类型
+2. 当前同时承接 source 小写组件目录与现有旧组件类型，避免迁移中断
 3. 更新后检查所属 `.folder.md`
 */
 
@@ -9,6 +9,72 @@ export type DevicePreset = 'iPhone' | 'Android' | 'iPad' | 'Desktop' | 'Custom'
 export type DevicePresetKey = DevicePreset
 
 export type ComponentType =
+  | 'navigation'
+  | 'hero'
+  | 'card'
+  | 'button'
+  | 'sidebar'
+  | 'table'
+  | 'form'
+  | 'input'
+  | 'modal'
+  | 'footer'
+  | 'avatar'
+  | 'badge'
+  | 'text'
+  | 'image'
+  | 'list'
+  | 'tabs'
+  | 'header'
+  | 'section'
+  | 'grid'
+  | 'dropdown'
+  | 'toggle'
+  | 'breadcrumb'
+  | 'pagination'
+  | 'progress'
+  | 'divider'
+  | 'accordion'
+  | 'carousel'
+  | 'chart'
+  | 'video'
+  | 'search'
+  | 'toast'
+  | 'tooltip'
+  | 'pricing'
+  | 'testimonial'
+  | 'cta'
+  | 'alert'
+  | 'banner'
+  | 'stat'
+  | 'stepper'
+  | 'tag'
+  | 'rating'
+  | 'map'
+  | 'timeline'
+  | 'fileUpload'
+  | 'codeBlock'
+  | 'calendar'
+  | 'notification'
+  | 'productCard'
+  | 'profile'
+  | 'drawer'
+  | 'popover'
+  | 'logo'
+  | 'faq'
+  | 'gallery'
+  | 'checkbox'
+  | 'radio'
+  | 'slider'
+  | 'datePicker'
+  | 'skeleton'
+  | 'chip'
+  | 'icon'
+  | 'spinner'
+  | 'feature'
+  | 'team'
+  | 'login'
+  | 'contact'
   | 'Header'
   | 'TabBar'
   | 'Card'
@@ -21,6 +87,22 @@ export type ComponentType =
   | 'Spacer'
   | 'Icon'
   | 'Modal'
+
+export type ComponentSectionName = 'Layout' | 'Content' | 'Controls' | 'Elements' | 'Blocks'
+
+export interface ComponentCatalogItem {
+  type: ComponentType
+  label: string
+  width: number
+  height: number
+}
+
+export interface ComponentCatalogSection {
+  section: ComponentSectionName
+  items: ComponentCatalogItem[]
+}
+
+export type ComponentSection = ComponentCatalogSection
 
 export type InteractionTrigger = 'tap' | 'longPress' | 'swipe'
 export type InteractionAction = 'navigate' | 'back' | 'showModal'
@@ -104,10 +186,24 @@ export interface RestoreTestResult {
   error: string | null
 }
 
+export interface WorkspaceProjectSnapshot {
+  project: ProjectData | null
+  activeBoardId: string | null
+}
+
+export interface WireframeState {
+  enabled: boolean
+  purpose: string
+  opacity: number
+  exploreSnapshot: WorkspaceProjectSnapshot | null
+  designSnapshot: WorkspaceProjectSnapshot | null
+}
+
 export interface WorkspaceSnapshot {
   project: ProjectData | null
   settings: AISettings
   activeBoardId: string | null
+  wireframe: WireframeState
 }
 
 export interface PersistedState {
@@ -116,6 +212,7 @@ export interface PersistedState {
   selectedComponentId: string | null
   settings: AISettings
   setupCompleted: boolean
+  wireframe: WireframeState
 }
 
 export type ComponentData = ProtoComponent
@@ -125,4 +222,5 @@ export interface AppState {
   project: ProjectData | null
   settings: AISettings
   activeBoardId: string | null
+  wireframe: WireframeState
 }

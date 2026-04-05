@@ -1,18 +1,24 @@
+/// <reference types="node" />
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前覆盖待放置创建、fit 缩放、预览交互与画板重名回归
+2. 当前覆盖 wireframe 点击放置、拖拽定尺寸、fit 缩放、预览交互与画板重名回归
 3. 更新后检查所属 `.folder.md`
 */
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import App from '../App'
 import { BoardCanvas } from './BoardCanvas'
 import { BoardStrip } from './BoardStrip'
 import { ComponentPalette } from './ComponentPalette'
 import { PreviewOverlay } from './PreviewOverlay'
 import { useAppStore } from '../stores/appStore'
 import { createBoard, createComponent, createProject, createId } from '../utils/project'
+
+const appStyles = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
 
 class ResizeObserverMock {
   static callbacks: Array<() => void> = []
@@ -63,9 +69,24 @@ afterEach(() => {
 })
 
 describe('BoardCanvas', () => {
-  it('enters placement mode from palette and only creates after drawing an area', () => {
+  it('keeps component palette scrollable within the left sidebar', () => {
     const project = createProject('测试项目', 'iPhone')
     useAppStore.getState().replaceProject(project)
+
+    const { container } = render(<App />)
+    const palette = container.querySelector('.component-palette')
+    const paletteRule = appStyles.match(/\.component-palette\s*\{[^}]*\}/)?.[0] ?? ''
+
+    expect(palette).not.toBeNull()
+    expect(paletteRule).toContain('flex: 1;')
+    expect(paletteRule).toContain('min-height: 0;')
+    expect(paletteRule).toContain('overflow: auto;')
+  })
+
+  it('places a component at default size when clicking the canvas in wireframe mode', () => {
+    const project = createProject('测试项目', 'iPhone')
+    useAppStore.getState().replaceProject(project)
+    useAppStore.getState().setWireframeMode(true)
 
     const { container } = render(
       <>
@@ -83,9 +104,49 @@ describe('BoardCanvas', () => {
       (canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /按钮$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Button/i }))
 
-    expect(useAppStore.getState().project?.boards[0]?.components).toHaveLength(0)
+    fireEvent.pointerDown(canvas as Element, {
+      button: 0,
+      clientX: 48 * scale,
+      clientY: 72 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 48 * scale,
+      clientY: 72 * scale,
+    })
+
+    const placed = useAppStore.getState().project?.boards[0]?.components[0]
+
+    expect(placed?.type).toBe('button')
+    expect(placed?.x).toBe(48)
+    expect(placed?.y).toBe(72)
+    expect(placed?.width).toBe(140)
+    expect(placed?.height).toBe(40)
+  })
+
+  it('draws a custom frame when dragging on the canvas in wireframe mode', () => {
+    const project = createProject('测试项目', 'iPhone')
+    useAppStore.getState().replaceProject(project)
+    useAppStore.getState().setWireframeMode(true)
+
+    const { container } = render(
+      <>
+        <ComponentPalette />
+        <BoardCanvas />
+      </>,
+    )
+    const board = project.boards[0]
+    const canvas = container.querySelector('.board-canvas')
+
+    expect(canvas).not.toBeNull()
+    expect(board.components).toHaveLength(0)
+
+    const scale = Number(
+      (canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /^Button/i }))
 
     fireEvent.pointerDown(canvas as Element, {
       button: 0,
@@ -103,7 +164,7 @@ describe('BoardCanvas', () => {
 
     const placed = useAppStore.getState().project?.boards[0]?.components[0]
 
-    expect(placed?.type).toBe('Button')
+    expect(placed?.type).toBe('button')
     expect(placed?.x).toBe(40)
     expect(placed?.y).toBe(56)
     expect(placed?.width).toBe(184)
