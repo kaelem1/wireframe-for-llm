@@ -4,7 +4,13 @@
 2. 更新后检查所属 `.folder.md`
 */
 
-import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { useAppStore } from '../stores/appStore'
 import { COMPONENT_DEFINITIONS } from '../utils/constants'
 import { findComponentById, getBoardById } from '../utils/project'
@@ -18,6 +24,7 @@ type Guide = {
 type ActiveTransform = {
   mode: 'move' | 'resize'
   componentId: string
+  scale: number
   startX: number
   startY: number
   originX: number
@@ -31,6 +38,15 @@ type ContextMenuState = {
   y: number
   componentId: string
 } | null
+
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 1
+const ZOOM_STEP = 0.1
+const STAGE_PADDING = 48
+
+function clampZoom(value: number) {
+  return Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM)
+}
 
 function makeBadges(targetId: string | undefined, componentId: string, projectBoards: { id: string; name: string }[]) {
   if (!targetId) {
@@ -60,8 +76,13 @@ export function BoardCanvas() {
   const [guides, setGuides] = useState<Guide[]>([])
   const [transform, setTransform] = useState<ActiveTransform | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
+  const [fitScale, setFitScale] = useState(1)
+  const [manualScale, setManualScale] = useState(1)
+  const [scaleMode, setScaleMode] = useState<'fit' | 'manual'>('fit')
+  const stageRef = useRef<HTMLDivElement>(null)
 
   const board = project && activeBoardId ? getBoardById(project, activeBoardId) ?? null : null
+  const scale = scaleMode === 'fit' ? fitScale : manualScale
 
   const otherComponents = useMemo(() => {
     if (!board || !selectedComponentId) {
@@ -69,6 +90,41 @@ export function BoardCanvas() {
     }
     return board.components.filter((item) => item.id !== selectedComponentId)
   }, [board, selectedComponentId])
+
+  useEffect(() => {
+    if (!project) {
+      return
+    }
+
+    const boardSize = project.boardSize
+
+    function updateFitScale() {
+      const stage = stageRef.current
+      if (!stage) {
+        return
+      }
+
+      const availableWidth = Math.max(stage.clientWidth - STAGE_PADDING, 0)
+      const availableHeight = Math.max(stage.clientHeight - STAGE_PADDING, 0)
+      const nextScale = clampZoom(
+        Math.min(
+          1,
+          availableWidth / boardSize.width,
+          availableHeight / boardSize.height,
+        ),
+      )
+
+      setFitScale(nextScale)
+    }
+
+    updateFitScale()
+    const observer = new ResizeObserver(updateFitScale)
+    if (stageRef.current) {
+      observer.observe(stageRef.current)
+    }
+
+    return () => observer.disconnect()
+  }, [project])
 
   useEffect(() => {
     if (!transform || !project) {
@@ -112,8 +168,8 @@ export function BoardCanvas() {
     }
 
     function handlePointerMove(event: PointerEvent) {
-      const deltaX = event.clientX - activeTransform.startX
-      const deltaY = event.clientY - activeTransform.startY
+      const deltaX = (event.clientX - activeTransform.startX) / activeTransform.scale
+      const deltaY = (event.clientY - activeTransform.startY) / activeTransform.scale
 
       if (activeTransform.mode === 'move') {
         const nextX = activeTransform.originX + deltaX
@@ -155,8 +211,8 @@ export function BoardCanvas() {
 
     const rect = event.currentTarget.getBoundingClientRect()
     addComponent(type as keyof typeof COMPONENT_DEFINITIONS, {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
+      x: (event.clientX - rect.left) / scale,
+      y: (event.clientY - rect.top) / scale,
     })
   }
 
@@ -181,6 +237,7 @@ export function BoardCanvas() {
     setTransform({
       mode,
       componentId,
+      scale,
       startX: event.clientX,
       startY: event.clientY,
       originX: component.x,
@@ -193,71 +250,119 @@ export function BoardCanvas() {
   return (
     <div className="canvas-shell">
       <div className="canvas-header">
-        <span>{board.name}</span>
-        <span>{project.boardSize.width} × {project.boardSize.height}</span>
+        <div className="canvas-header__meta">
+          <span>{board.name}</span>
+          <span>{project.boardSize.width} × {project.boardSize.height}</span>
+        </div>
+
+        <div className="canvas-zoom">
+          <button
+            type="button"
+            className="canvas-zoom__button"
+            aria-label="缩小画板"
+            onClick={() => {
+              setScaleMode('manual')
+              setManualScale(clampZoom(scale - ZOOM_STEP))
+            }}
+          >
+            -
+          </button>
+          <span className="canvas-zoom__value">{Math.round(scale * 100)}%</span>
+          <button
+            type="button"
+            className="canvas-zoom__button"
+            aria-label="放大画板"
+            onClick={() => {
+              setScaleMode('manual')
+              setManualScale(clampZoom(scale + ZOOM_STEP))
+            }}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="canvas-zoom__button canvas-zoom__button--fit"
+            onClick={() => setScaleMode('fit')}
+          >
+            适应屏幕
+          </button>
+        </div>
       </div>
 
-      <div className="canvas-stage">
+      <div className="canvas-stage" ref={stageRef}>
         <div
-          className="board-canvas"
-          style={{ width: project.boardSize.width, height: project.boardSize.height }}
-          onClick={() => {
-            selectComponent(null)
-            setEditingComponentId(null)
-            setContextMenu(null)
+          className="canvas-stage__viewport"
+          style={{
+            width: project.boardSize.width * scale,
+            height: project.boardSize.height * scale,
           }}
-          onDragOver={(event) => {
-            event.preventDefault()
-            event.dataTransfer.dropEffect = 'copy'
-          }}
-          onDrop={handleDrop}
         >
-          {guides.map((guide, index) => (
-            <div
-              key={`${guide.orientation}-${guide.position}-${index}`}
-              className={
-                guide.orientation === 'vertical'
-                  ? 'canvas-guide canvas-guide--vertical'
-                  : 'canvas-guide canvas-guide--horizontal'
-              }
-              style={guide.orientation === 'vertical' ? { left: guide.position } : { top: guide.position }}
-            />
-          ))}
-
-          {board.components.map((component) => {
-            const firstInteraction = component.interactions[0]
-            const badge =
-              firstInteraction?.action === 'showModal'
-                ? makeBadges(firstInteraction.target, component.id, [])
-                : makeBadges(firstInteraction?.target, component.id, project.boards)
-
-            return (
-              <WireframeBlock
-                key={component.id}
-                component={component}
-                selected={selectedComponentId === component.id}
-                editing={editingComponentId === component.id}
-                badge={badge}
-                onPointerDown={(event) => startTransform(component.id, 'move', event)}
-                onResizePointerDown={(event) => startTransform(component.id, 'resize', event)}
-                onContextMenu={(event) => {
-                  event.preventDefault()
-                  selectComponent(component.id)
-                  setContextMenu({
-                    x: event.clientX,
-                    y: event.clientY,
-                    componentId: component.id,
-                  })
-                }}
-                onSelect={() => selectComponent(component.id)}
-                onStartEdit={() => setEditingComponentId(component.id)}
-                onCommitName={(value) => {
-                  updateComponent(component.id, { name: value })
-                  setEditingComponentId(null)
-                }}
+          <div
+            className="board-canvas"
+            style={{
+              width: project.boardSize.width,
+              height: project.boardSize.height,
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+            }}
+            onClick={() => {
+              selectComponent(null)
+              setEditingComponentId(null)
+              setContextMenu(null)
+            }}
+            onDragOver={(event) => {
+              event.preventDefault()
+              event.dataTransfer.dropEffect = 'copy'
+            }}
+            onDrop={handleDrop}
+          >
+            {guides.map((guide, index) => (
+              <div
+                key={`${guide.orientation}-${guide.position}-${index}`}
+                className={
+                  guide.orientation === 'vertical'
+                    ? 'canvas-guide canvas-guide--vertical'
+                    : 'canvas-guide canvas-guide--horizontal'
+                }
+                style={guide.orientation === 'vertical' ? { left: guide.position } : { top: guide.position }}
               />
-            )
-          })}
+            ))}
+
+            {board.components.map((component) => {
+              const firstInteraction = component.interactions[0]
+              const badge =
+                firstInteraction?.action === 'showModal'
+                  ? makeBadges(firstInteraction.target, component.id, [])
+                  : makeBadges(firstInteraction?.target, component.id, project.boards)
+
+              return (
+                <WireframeBlock
+                  key={component.id}
+                  component={component}
+                  selected={selectedComponentId === component.id}
+                  editing={editingComponentId === component.id}
+                  badge={badge}
+                  onPointerDown={(event) => startTransform(component.id, 'move', event)}
+                  onResizePointerDown={(event) => startTransform(component.id, 'resize', event)}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    selectComponent(component.id)
+                    setContextMenu({
+                      x: event.clientX,
+                      y: event.clientY,
+                      componentId: component.id,
+                    })
+                  }}
+                  onSelect={() => selectComponent(component.id)}
+                  onStartEdit={() => setEditingComponentId(component.id)}
+                  onCommitName={(value) => {
+                    updateComponent(component.id, { name: value })
+                    setEditingComponentId(null)
+                  }}
+                />
+              )
+            })}
+          </div>
         </div>
       </div>
 

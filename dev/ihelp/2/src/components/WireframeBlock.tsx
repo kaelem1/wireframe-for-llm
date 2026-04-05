@@ -65,7 +65,10 @@ export function WireframeBlock(props: WireframeBlockProps) {
       }}
       onPointerDown={onPointerDown}
       onContextMenu={onContextMenu}
-      onClick={() => onSelect?.()}
+      onClick={(event) => {
+        event.stopPropagation()
+        onSelect?.()
+      }}
     >
       {badge ? <span className="wireframe-block__badge">{badge}</span> : null}
 
