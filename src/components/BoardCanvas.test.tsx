@@ -104,7 +104,7 @@ describe('BoardCanvas', () => {
       (canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /^Button/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^BtnButton140 × 40$/i }))
 
     fireEvent.pointerDown(canvas as Element, {
       button: 0,
@@ -146,7 +146,7 @@ describe('BoardCanvas', () => {
       (canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /^Button/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^BtnButton140 × 40$/i }))
 
     fireEvent.pointerDown(canvas as Element, {
       button: 0,
