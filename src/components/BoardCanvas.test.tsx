@@ -2,7 +2,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前覆盖统一画布模式、顶部项目名迁移、左栏精简、组件放置、多选框选、图层拖拽、fit 缩放、预览交互与画板重名回归
+2. 当前覆盖统一画布模式、顶部项目名迁移、左栏精简、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽、fit 缩放、预览交互与画板重名回归
 3. 更新后检查所属 `.folder.md`
 */
 
@@ -101,7 +101,7 @@ describe('BoardCanvas', () => {
 
     const { container } = render(<App />)
 
-    expect(screen.getByText('图层')).toBeTruthy()
+    expect(screen.getByText('Layers')).toBeTruthy()
     expect(screen.queryByText('Canvas Opacity')).toBeNull()
     expect(screen.queryByRole('button', { name: 'On' })).toBeNull()
     expect(container.querySelector('.canvas-header')).toBeNull()
@@ -288,6 +288,107 @@ describe('BoardCanvas', () => {
     ])
   })
 
+  it('allows header and navigation components to move and resize freely', () => {
+    const project = createProject('测试项目', 'Desktop')
+    const board = project.boards[0]
+    const header = createComponent('header', board, project.boardSize, { x: 48, y: 40 })
+    const navigation = createComponent('navigation', board, project.boardSize, { x: 88, y: 152 })
+    board.components.push(header, navigation)
+    useAppStore.getState().replaceProject(project)
+
+    const { container } = render(<BoardCanvas />)
+    const canvas = container.querySelector('.board-canvas') as HTMLDivElement | null
+    const blocks = container.querySelectorAll('.wireframe-block')
+
+    expect(canvas).not.toBeNull()
+    expect(blocks).toHaveLength(2)
+
+    const scale = Number(canvas?.style.transform.replace('scale(', '').replace(')', ''))
+
+    fireEvent.pointerDown(blocks[0], {
+      button: 0,
+      clientX: 32 * scale,
+      clientY: 24 * scale,
+    })
+
+    const resizeHandle = container.querySelector('.canvas-selection__handle--se')
+    expect(resizeHandle).not.toBeNull()
+
+    fireEvent.pointerDown(resizeHandle as Element, {
+      button: 0,
+      clientX: (header.x + header.width) * scale,
+      clientY: (header.y + header.height) * scale,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 320 * scale,
+      clientY: 220 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 320 * scale,
+      clientY: 220 * scale,
+    })
+
+    const resizedHeader = useAppStore.getState().project?.boards[0]?.components[0]
+    expect(resizedHeader?.width).not.toBe(project.boardSize.width)
+    expect(resizedHeader?.height).toBeGreaterThan(header.height)
+
+    fireEvent.pointerDown(blocks[0], {
+      button: 0,
+      clientX: 32 * scale,
+      clientY: 24 * scale,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 136 * scale,
+      clientY: 112 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 136 * scale,
+      clientY: 112 * scale,
+    })
+
+    const movedHeader = useAppStore.getState().project?.boards[0]?.components[0]
+    expect(movedHeader?.x).not.toBe(0)
+    expect(movedHeader?.y).not.toBe(0)
+
+    fireEvent.pointerDown(blocks[1], {
+      button: 0,
+      clientX: 48 * scale,
+      clientY: 24 * scale,
+    })
+    const navigationResizeHandle = container.querySelector('.canvas-selection__handle--se')
+    expect(navigationResizeHandle).not.toBeNull()
+    fireEvent.pointerDown(navigationResizeHandle as Element, {
+      button: 0,
+      clientX: (navigation.width + navigation.x) * scale,
+      clientY: (navigation.height + navigation.y) * scale,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 280 * scale,
+      clientY: 120 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 280 * scale,
+      clientY: 120 * scale,
+    })
+    fireEvent.pointerDown(blocks[1], {
+      button: 0,
+      clientX: 48 * scale,
+      clientY: 24 * scale,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 184 * scale,
+      clientY: 128 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 184 * scale,
+      clientY: 128 * scale,
+    })
+
+    const movedNavigation = useAppStore.getState().project?.boards[0]?.components[1]
+    expect(movedNavigation?.x).not.toBe(0)
+    expect(movedNavigation?.y).not.toBe(0)
+  })
+
   it('keeps canvas fit-to-screen and removes manual zoom controls', () => {
     const project = createProject('测试项目', 'Desktop')
     useAppStore.getState().replaceProject(project)
@@ -433,6 +534,47 @@ describe('BoardCanvas', () => {
     expect((inputs[1] as HTMLInputElement).value).toBe('详情页')
   })
 
+  it('shows a more menu on board chips and can duplicate or delete the active board', () => {
+    const project = createProject('测试项目', 'iPhone')
+    const sourceBoard = project.boards[0]
+    const button = createComponent('Button', sourceBoard, project.boardSize, { x: 48, y: 64 })
+    button.name = '主按钮'
+    sourceBoard.components.push(button)
+    useAppStore.getState().replaceProject(project)
+
+    const { rerender } = render(<BoardStrip />)
+
+    expect(screen.queryByRole('button', { name: /删除首页/ })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '更多首页' }))
+
+    expect(screen.getByRole('button', { name: '创建副本' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '删除' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '创建副本' }))
+
+    const boardsAfterDuplicate = useAppStore.getState().project?.boards ?? []
+    expect(boardsAfterDuplicate).toHaveLength(2)
+    expect(boardsAfterDuplicate[1]?.name).toContain('副本')
+    expect(boardsAfterDuplicate[1]?.components).toHaveLength(1)
+    expect(boardsAfterDuplicate[1]?.components[0]).toMatchObject({
+      type: 'Button',
+      name: '主按钮',
+      x: 48,
+      y: 64,
+      width: button.width,
+      height: button.height,
+    })
+    expect(boardsAfterDuplicate[1]?.components[0]?.id).not.toBe(button.id)
+    expect(boardsAfterDuplicate[1]?.components[0]?.interactions).toEqual([])
+
+    rerender(<BoardStrip />)
+    fireEvent.click(screen.getByRole('button', { name: `更多${boardsAfterDuplicate[1]?.name}` }))
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+
+    expect(useAppStore.getState().project?.boards).toHaveLength(1)
+  })
+
   it('reorders layers by drag and drop in the layer panel', () => {
     const project = createProject('测试项目', 'Desktop')
     const board = project.boards[0]
@@ -464,5 +606,81 @@ describe('BoardCanvas', () => {
       'Second',
       'First',
     ])
+  })
+
+  it('uses a consistent English label system in the side panels', () => {
+    const project = createProject('测试项目', 'Desktop')
+    const board = project.boards[0]
+    const component = createComponent('Button', board, project.boardSize, { x: 48, y: 48 })
+    component.interactions.push({
+      id: createId('interaction'),
+      trigger: 'tap',
+      action: 'back',
+    })
+    board.components.push(component)
+    useAppStore.getState().replaceProject(project)
+    useAppStore.getState().selectComponent(component.id)
+
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: 'Interactions' })).toBeTruthy()
+    expect(screen.getByText('Layers')).toBeTruthy()
+    expect(screen.getByText('Name')).toBeTruthy()
+    expect(screen.getByText('Trigger')).toBeTruthy()
+    expect(screen.getByText('Action')).toBeTruthy()
+    expect(screen.queryByText('交互')).toBeNull()
+    expect(screen.queryByText('图层')).toBeNull()
+    expect(screen.queryByText('名称')).toBeNull()
+  })
+
+  it('shows hover feedback for layer drag targets', () => {
+    const project = createProject('测试项目', 'Desktop')
+    const board = project.boards[0]
+    board.components.push(
+      createComponent('Card', board, project.boardSize, { x: 48, y: 48 }),
+      createComponent('Button', board, project.boardSize, { x: 96, y: 160 }),
+    )
+    useAppStore.getState().replaceProject(project)
+
+    render(<InteractionPanel />)
+
+    const items = screen.getAllByRole('button')
+    const dataTransfer = {
+      store: new Map<string, string>(),
+      setData(type: string, value: string) {
+        this.store.set(type, value)
+      },
+      getData(type: string) {
+        return this.store.get(type) ?? ''
+      },
+    }
+
+    fireEvent.dragStart(items[0], { dataTransfer })
+    fireEvent.dragOver(items[1], { dataTransfer })
+
+    expect(items[1].className).toContain('is-drop-target')
+
+    fireEvent.drop(items[1], { dataTransfer })
+    expect(items[1].className).not.toContain('is-drop-target')
+  })
+
+  it('shows explicit batch actions in the right panel for multi-selection', () => {
+    const project = createProject('测试项目', 'Desktop')
+    const board = project.boards[0]
+    const first = createComponent('Card', board, project.boardSize, { x: 48, y: 48 })
+    const second = createComponent('Button', board, project.boardSize, { x: 96, y: 160 })
+    board.components.push(first, second)
+    useAppStore.getState().replaceProject(project)
+    useAppStore.getState().selectComponents([first.id, second.id])
+
+    render(<InteractionPanel />)
+
+    expect(screen.getByText('2 selected')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Delete Selected' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Clear Selection' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Selected' }))
+
+    expect(useAppStore.getState().project?.boards[0]?.components).toHaveLength(0)
   })
 })
