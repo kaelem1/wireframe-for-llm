@@ -5,13 +5,11 @@
 */
 
 import { useEffect, useRef } from 'react'
-import { AIGeneratorDialog } from './components/AIGeneratorDialog'
 import { BoardCanvas } from './components/BoardCanvas'
 import { BoardStrip } from './components/BoardStrip'
 import { ComponentPalette } from './components/ComponentPalette'
 import { InteractionPanel } from './components/InteractionPanel'
 import { PreviewOverlay } from './components/PreviewOverlay'
-import { SettingsDialog } from './components/SettingsDialog'
 import { SetupDialog } from './components/SetupDialog'
 import { Toolbar } from './components/Toolbar'
 import { useAppStore } from './stores/appStore'
@@ -36,14 +34,10 @@ export default function App() {
   const activeBoardId = useAppStore((state) => state.activeBoardId)
   const selectedComponentId = useAppStore((state) => state.selectedComponentId)
   const isPreview = useAppStore((state) => state.isPreview)
-  const isAiPanelOpen = useAppStore((state) => state.isAiPanelOpen)
-  const isSettingsOpen = useAppStore((state) => state.isSettingsOpen)
   const initializeProject = useAppStore((state) => state.initializeProject)
   const importProjectJson = useAppStore((state) => state.importProjectJson)
   const exportProject = useAppStore((state) => state.exportProjectJson)
   const setProjectName = useAppStore((state) => state.setProjectName)
-  const setShowAI = useAppStore((state) => state.setShowAI)
-  const setShowSettings = useAppStore((state) => state.setShowSettings)
   const addBoard = useAppStore((state) => state.addBoard)
   const deleteComponent = useAppStore((state) => state.deleteComponent)
   const duplicateComponent = useAppStore((state) => state.duplicateComponent)
@@ -156,9 +150,7 @@ export default function App() {
           onProjectNameChange={setProjectName}
           onExport={() => downloadJson(`${project.project || 'wireframe-project'}.json`, JSON.parse(exportProject()))}
           onImport={() => importRef.current?.click()}
-          onOpenAI={() => setShowAI(true)}
           onTogglePreview={togglePreview}
-          onOpenSettings={() => setShowSettings(true)}
         />
 
         <div className="workspace">
@@ -192,9 +184,6 @@ export default function App() {
           event.target.value = ''
         }}
       />
-
-      <AIGeneratorDialog open={isAiPanelOpen} />
-      <SettingsDialog open={isSettingsOpen} />
       <PreviewOverlay />
     </>
   )

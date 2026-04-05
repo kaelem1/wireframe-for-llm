@@ -1,7 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前预览态由块根节点承接交互，避免内部按钮吞点击
+3. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useState, type MouseEvent, type PointerEvent } from 'react'
@@ -15,6 +16,7 @@ interface WireframeBlockProps {
   preview?: boolean
   badge?: string | null
   onPointerDown?: (event: PointerEvent<HTMLDivElement>) => void
+  onPointerUp?: (event: PointerEvent<HTMLDivElement>) => void
   onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void
   onSelect?: () => void
   onStartEdit?: () => void
@@ -30,6 +32,7 @@ export function WireframeBlock(props: WireframeBlockProps) {
     preview,
     badge,
     onPointerDown,
+    onPointerUp,
     onContextMenu,
     onSelect,
     onStartEdit,
@@ -64,6 +67,7 @@ export function WireframeBlock(props: WireframeBlockProps) {
         height: component.height,
       }}
       onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
       onContextMenu={onContextMenu}
       onClick={(event) => {
         event.stopPropagation()
@@ -92,17 +96,21 @@ export function WireframeBlock(props: WireframeBlockProps) {
             onPointerDown={(event) => event.stopPropagation()}
           />
         ) : (
-          <button
-            type="button"
-            className="wireframe-block__name-button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onStartEdit?.()
-            }}
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            {component.name}
-          </button>
+          preview ? (
+            <span className="wireframe-block__name-button">{component.name}</span>
+          ) : (
+            <button
+              type="button"
+              className="wireframe-block__name-button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onStartEdit?.()
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              {component.name}
+            </button>
+          )
         )}
       </div>
 

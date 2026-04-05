@@ -1,7 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前包含待放置组件状态、画板名防重与预览状态
+3. 更新后检查所属 `.folder.md`
 */
 
 import { applyPatches, enablePatches, produceWithPatches, type Patch } from 'immer'
@@ -21,6 +22,7 @@ import {
   findComponentById,
   getBoardById,
   getNextBoardName,
+  getPlacedComponentFrame,
   loadPersistedState,
   normalizeComponent,
   normalizeComponentFrame,
@@ -49,6 +51,7 @@ type HistoryState = {
   project: ProjectData | null
   activeBoardId: string | null
   selectedComponentId: string | null
+  pendingComponentType: ComponentType | null
 }
 
 type HistoryEntry = {
@@ -62,6 +65,7 @@ type StoreState = {
   activeBoardId: string | null
   selectedComponentId: string | null
   editingComponentId: string | null
+  pendingComponentType: ComponentType | null
   isPreview: boolean
   previewBoardStack: string[]
   previewModalId: string | null
@@ -94,11 +98,16 @@ type StoreState = {
   setActiveBoardId: (boardId: string) => void
   selectComponent: (componentId: string | null) => void
   setEditingComponentId: (componentId: string | null) => void
+  setPendingComponentType: (type: ComponentType | null) => void
   addBoard: () => void
   deleteBoard: (boardId: string) => void
   reorderBoards: (fromIndex: number, toIndex: number) => void
   updateBoardName: (boardId: string, name: string) => void
   addComponent: (type: ComponentType, position?: { x: number; y: number }) => void
+  placeComponent: (
+    type: ComponentType,
+    frame: Pick<ProtoComponent, 'x' | 'y' | 'width' | 'height'>,
+  ) => void
   updateComponent: (
     componentId: string,
     updates: Partial<Pick<ProtoComponent, 'name' | 'x' | 'y' | 'width' | 'height'>>,
@@ -139,6 +148,7 @@ function getHistoryState(state: StoreState): HistoryState {
     project: state.project,
     activeBoardId: state.activeBoardId,
     selectedComponentId: state.selectedComponentId,
+    pendingComponentType: state.pendingComponentType,
   }
 }
 
@@ -172,6 +182,7 @@ export const useAppStore = create<StoreState>((set, get) => {
       project: next.project,
       activeBoardId: next.activeBoardId,
       selectedComponentId: next.selectedComponentId,
+      pendingComponentType: next.pendingComponentType,
       editingComponentId: null,
       ...previewReset,
       history: {
@@ -187,6 +198,7 @@ export const useAppStore = create<StoreState>((set, get) => {
     activeBoardId: persisted?.currentBoardId ?? null,
     selectedComponentId: persisted?.selectedComponentId ?? null,
     editingComponentId: null,
+    pendingComponentType: null,
     ...previewReset,
     restoreTestResult: {
       status: 'idle',
@@ -212,6 +224,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         activeBoardId: snapshot?.activeBoardId ?? snapshot?.project?.boards[0]?.id ?? null,
         selectedComponentId: null,
         editingComponentId: null,
+        pendingComponentType: null,
         history: { past: [], future: [] },
         ...previewReset,
       }),
@@ -230,6 +243,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         activeBoardId: project.boards[0]?.id ?? null,
         selectedComponentId: null,
         editingComponentId: null,
+        pendingComponentType: null,
         history: { past: [], future: [] },
         generation: { status: 'idle', error: null },
         restoreTestResult: { status: 'idle', code: '', html: '', error: null },
@@ -242,6 +256,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         activeBoardId: project.boards[0]?.id ?? null,
         selectedComponentId: null,
         editingComponentId: null,
+        pendingComponentType: null,
         history: { past: [], future: [] },
         generation: { status: 'idle', error: null },
         restoreTestResult: { status: 'idle', code: '', html: '', error: null },
@@ -265,10 +280,13 @@ export const useAppStore = create<StoreState>((set, get) => {
         activeBoardId: boardId,
         selectedComponentId: null,
         editingComponentId: null,
+        pendingComponentType: null,
         ...(state.isPreview ? previewReset : {}),
       })),
     selectComponent: (selectedComponentId) => set({ selectedComponentId }),
     setEditingComponentId: (editingComponentId) => set({ editingComponentId }),
+    setPendingComponentType: (pendingComponentType) =>
+      set({ pendingComponentType, selectedComponentId: null, editingComponentId: null }),
     addBoard: () =>
       commit((draft) => {
         if (!draft.project) {
@@ -309,8 +327,12 @@ export const useAppStore = create<StoreState>((set, get) => {
           return
         }
         const board = getBoardById(draft.project, boardId)
-        if (board) {
-          board.name = name || '未命名画板'
+        const nextName = name || '未命名画板'
+        if (
+          board &&
+          !draft.project.boards.some((item) => item.id !== boardId && item.name === nextName)
+        ) {
+          board.name = nextName
         }
       }),
     addComponent: (type, position) =>
@@ -326,6 +348,24 @@ export const useAppStore = create<StoreState>((set, get) => {
         board.components.push(component)
         draft.activeBoardId = board.id
         draft.selectedComponentId = component.id
+        draft.pendingComponentType = null
+      }),
+    placeComponent: (type, frame) =>
+      commit((draft) => {
+        if (!draft.project) {
+          return
+        }
+        const board = getActiveBoard(draft.project, draft.activeBoardId)
+        if (!board) {
+          return
+        }
+        const placedFrame = getPlacedComponentFrame(type, frame, draft.project.boardSize)
+        const component = createComponent(type, board, draft.project.boardSize)
+        Object.assign(component, placedFrame)
+        board.components.push(component)
+        draft.activeBoardId = board.id
+        draft.selectedComponentId = component.id
+        draft.pendingComponentType = null
       }),
     updateComponent: (componentId, updates) =>
       commit((draft) => {
@@ -477,6 +517,7 @@ export const useAppStore = create<StoreState>((set, get) => {
           previewBoardStack: [activeBoard.id],
           previewModalId: null,
           previewDirection: null,
+          pendingComponentType: null,
         }
       }),
     closePreview: () => set(previewReset),
@@ -536,6 +577,7 @@ export const useAppStore = create<StoreState>((set, get) => {
           ...state,
           ...reverted,
           editingComponentId: null,
+          pendingComponentType: null,
           ...previewReset,
           history: {
             past: state.history.past.slice(0, -1),
@@ -554,6 +596,7 @@ export const useAppStore = create<StoreState>((set, get) => {
           ...state,
           ...next,
           editingComponentId: null,
+          pendingComponentType: null,
           ...previewReset,
           history: {
             past: [...state.history.past, entry],

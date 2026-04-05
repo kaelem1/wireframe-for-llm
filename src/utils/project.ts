@@ -1,11 +1,12 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前包含项目导出扩展与最小布局语义派生
+2. 当前包含项目导出扩展、fit 缩放与放置/命名辅助
 3. 更新后检查所属 `.folder.md`
 */
 
 import {
+  BOARD_STAGE_PADDING,
   COMPONENT_META_MAP,
   DEFAULT_AI_BASE_URL,
   DEFAULT_AI_MODEL,
@@ -44,6 +45,17 @@ export function snap(value: number) {
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
+}
+
+export function getBoardFitScale(boardSize: BoardSize, stageWidth: number, stageHeight: number) {
+  const availableWidth = Math.max(stageWidth - BOARD_STAGE_PADDING, 0)
+  const availableHeight = Math.max(stageHeight - BOARD_STAGE_PADDING, 0)
+
+  return Math.min(
+    1,
+    availableWidth / boardSize.width,
+    availableHeight / boardSize.height,
+  )
 }
 
 export function getDeviceSize(device: DevicePreset, custom?: BoardSize) {
@@ -239,7 +251,35 @@ export function findComponentById(project: ProjectData, componentId: string) {
 }
 
 export function getNextBoardName(project: ProjectData) {
-  return `画板${project.boards.length + 1}`
+  let index = 1
+
+  while (project.boards.some((board) => board.name === `画板${index}`)) {
+    index += 1
+  }
+
+  return `画板${index}`
+}
+
+export function getPlacedComponentFrame(
+  type: ComponentType,
+  frame: Pick<ProtoComponent, 'x' | 'y' | 'width' | 'height'>,
+  boardSize: BoardSize,
+) {
+  const normalized = normalizeComponentFrame(type, frame, boardSize)
+
+  if (type !== 'Modal') {
+    return normalized
+  }
+
+  return {
+    ...normalized,
+    x: clamp(snap((boardSize.width - normalized.width) / 2), 0, boardSize.width - normalized.width),
+    y: clamp(
+      snap((boardSize.height - normalized.height) / 2),
+      0,
+      boardSize.height - normalized.height,
+    ),
+  }
 }
 
 export function normalizeComponentFrame(

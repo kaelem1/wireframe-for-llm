@@ -1,14 +1,16 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前点击组件进入待放置状态，不再直接落板
+3. 更新后检查所属 `.folder.md`
 */
 
 import { COMPONENT_ORDER, COMPONENT_DEFINITIONS } from '../utils/constants'
 import { useAppStore } from '../stores/appStore'
 
 export function ComponentPalette() {
-  const addComponent = useAppStore((state) => state.addComponent)
+  const pendingComponentType = useAppStore((state) => state.pendingComponentType)
+  const setPendingComponentType = useAppStore((state) => state.setPendingComponentType)
 
   return (
     <div className="panel">
@@ -23,13 +25,14 @@ export function ComponentPalette() {
             <button
               key={type}
               type="button"
-              className="component-palette__item"
-              draggable
-              onClick={() => addComponent(type)}
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = 'copy'
-                event.dataTransfer.setData('application/x-wireframe-component', type)
-              }}
+              className={
+                pendingComponentType === type
+                  ? 'component-palette__item is-active'
+                  : 'component-palette__item'
+              }
+              onClick={() =>
+                setPendingComponentType(pendingComponentType === type ? null : type)
+              }
             >
               <span className="component-palette__icon">{definition.icon}</span>
               <span>{definition.label}</span>

@@ -1,7 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前包含组件放置约束与画布 fit 常量
+3. 更新后检查所属 `.folder.md`
 */
 
 import type { BoardSize, ComponentType, DevicePreset } from '../types/schema'
@@ -29,6 +30,8 @@ export interface ComponentMeta {
 export const GRID_SIZE = 8
 export const STORAGE_KEY = 'wireframe-proto-state'
 export const LOCAL_STORAGE_KEY = STORAGE_KEY
+export const BOARD_STAGE_PADDING = 48
+export const PLACEMENT_DRAG_THRESHOLD = 4
 export const DEFAULT_AI_BASE_URL = 'https://api.siliconflow.cn/v1'
 export const DEFAULT_AI_MODEL = 'zai-org/GLM-4.6'
 export const DEFAULT_PROJECT_NAME = '我的应用'
