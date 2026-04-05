@@ -30,136 +30,142 @@ export function InteractionPanel() {
     return null
   }
 
+  const layeredComponents = board.components
+    .map((component, index) => ({ component, index }))
+    .reverse()
+
   return (
     <div className="panel">
       <div className="panel__header">
         <h2>交互</h2>
       </div>
 
-      {selected ? (
-        <>
-          <label className="form-field">
-            <span>名称</span>
-            <input
-              value={selected.name}
-              onChange={(event) => updateComponent(selected.id, { name: event.target.value })}
-            />
-          </label>
+      <div className="panel__editor">
+        {selected ? (
+          <>
+            <label className="form-field">
+              <span>名称</span>
+              <input
+                value={selected.name}
+                onChange={(event) => updateComponent(selected.id, { name: event.target.value })}
+              />
+            </label>
 
-          <div className="interaction-list">
-            {selected.interactions.map((interaction) => (
-              <div key={interaction.id} className="interaction-card">
-                <label className="form-field">
-                  <span>触发方式</span>
-                  <select
-                    value={interaction.trigger}
-                    onChange={(event) =>
-                      setInteraction(selected.id, interaction.id, {
-                        trigger: event.target.value as typeof interaction.trigger,
-                        action: interaction.action,
-                        target: interaction.target,
-                      })
-                    }
-                  >
-                    {INTERACTION_TRIGGER_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="form-field">
-                  <span>动作</span>
-                  <select
-                    value={interaction.action}
-                    onChange={(event) =>
-                      setInteraction(selected.id, interaction.id, {
-                        trigger: interaction.trigger,
-                        action: event.target.value as typeof interaction.action,
-                        target: interaction.target,
-                      })
-                    }
-                  >
-                    {INTERACTION_ACTION_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                {interaction.action === 'navigate' ? (
+            <div className="interaction-list">
+              {selected.interactions.map((interaction) => (
+                <div key={interaction.id} className="interaction-card">
                   <label className="form-field">
-                    <span>目标</span>
+                    <span>触发方式</span>
                     <select
-                      value={interaction.target ?? ''}
+                      value={interaction.trigger}
                       onChange={(event) =>
                         setInteraction(selected.id, interaction.id, {
-                          trigger: interaction.trigger,
+                          trigger: event.target.value as typeof interaction.trigger,
                           action: interaction.action,
-                          target: event.target.value,
+                          target: interaction.target,
                         })
                       }
                     >
-                      <option value="">请选择画板</option>
-                      {project.boards.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
+                      {INTERACTION_TRIGGER_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
                         </option>
                       ))}
                     </select>
                   </label>
-                ) : null}
 
-                {interaction.action === 'showModal' ? (
                   <label className="form-field">
-                    <span>目标</span>
+                    <span>动作</span>
                     <select
-                      value={interaction.target ?? ''}
+                      value={interaction.action}
                       onChange={(event) =>
                         setInteraction(selected.id, interaction.id, {
                           trigger: interaction.trigger,
-                          action: interaction.action,
-                          target: event.target.value,
+                          action: event.target.value as typeof interaction.action,
+                          target: interaction.target,
                         })
                       }
                     >
-                      <option value="">请选择弹窗</option>
-                      {board.components
-                        .filter((item) => item.type === 'Modal')
-                        .map((item) => (
+                      {INTERACTION_ACTION_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {interaction.action === 'navigate' ? (
+                    <label className="form-field">
+                      <span>目标</span>
+                      <select
+                        value={interaction.target ?? ''}
+                        onChange={(event) =>
+                          setInteraction(selected.id, interaction.id, {
+                            trigger: interaction.trigger,
+                            action: interaction.action,
+                            target: event.target.value,
+                          })
+                        }
+                      >
+                        <option value="">请选择画板</option>
+                        {project.boards.map((item) => (
                           <option key={item.id} value={item.id}>
                             {item.name}
                           </option>
                         ))}
-                    </select>
-                  </label>
-                ) : null}
+                      </select>
+                    </label>
+                  ) : null}
 
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => removeInteraction(selected.id, interaction.id)}
-                >
-                  删除交互
-                </button>
-              </div>
-            ))}
-          </div>
+                  {interaction.action === 'showModal' ? (
+                    <label className="form-field">
+                      <span>目标</span>
+                      <select
+                        value={interaction.target ?? ''}
+                        onChange={(event) =>
+                          setInteraction(selected.id, interaction.id, {
+                            trigger: interaction.trigger,
+                            action: interaction.action,
+                            target: event.target.value,
+                          })
+                        }
+                      >
+                        <option value="">请选择弹窗</option>
+                        {board.components
+                          .filter((item) => item.type === 'Modal')
+                          .map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  ) : null}
 
-          <button type="button" className="ghost-button" onClick={() => addInteraction(selected.id)}>
-            + 添加交互
-          </button>
-        </>
-      ) : (
-        <div className="panel__empty">选中组件后可编辑名称、交互和图层顺序。</div>
-      )}
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => removeInteraction(selected.id, interaction.id)}
+                  >
+                    删除交互
+                  </button>
+                </div>
+              ))}
+            </div>
 
-      <div className="panel__section">
+            <button type="button" className="ghost-button" onClick={() => addInteraction(selected.id)}>
+              + 添加交互
+            </button>
+          </>
+        ) : (
+          <div className="panel__empty">选中组件后可编辑名称、交互和图层顺序。</div>
+        )}
+      </div>
+
+      <div className="panel__section panel__section--layers">
         <div className="panel__section-title">图层</div>
         <div className="layer-list">
-          {board.components.map((component, index) => (
+          {layeredComponents.map(({ component, index }) => (
             <button
               key={component.id}
               type="button"

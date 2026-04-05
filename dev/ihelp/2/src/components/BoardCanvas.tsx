@@ -1,7 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前支持待放置拖拽创建与只读 fit 缩放
+3. 更新后检查所属 `.folder.md`
 */
 
 import {
@@ -12,8 +13,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { COMPONENT_DEFINITIONS } from '../utils/constants'
-import { findComponentById, getBoardById } from '../utils/project'
+import { COMPONENT_DEFINITIONS, PLACEMENT_DRAG_THRESHOLD } from '../utils/constants'
+import { findComponentById, getBoardById, getBoardFitScale } from '../utils/project'
 import { WireframeBlock } from './WireframeBlock'
 
 type Guide = {
@@ -39,13 +40,19 @@ type ContextMenuState = {
   componentId: string
 } | null
 
-const MIN_ZOOM = 0.25
-const MAX_ZOOM = 1
-const ZOOM_STEP = 0.1
-const STAGE_PADDING = 48
+type PlacementDraft = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
-function clampZoom(value: number) {
-  return Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM)
+type ActivePlacement = {
+  type: keyof typeof COMPONENT_DEFINITIONS
+  scale: number
+  rect: DOMRect
+  startX: number
+  startY: number
 }
 
 function makeBadges(targetId: string | undefined, componentId: string, projectBoards: { id: string; name: string }[]) {
@@ -66,9 +73,10 @@ export function BoardCanvas() {
   const activeBoardId = useAppStore((state) => state.activeBoardId)
   const selectedComponentId = useAppStore((state) => state.selectedComponentId)
   const editingComponentId = useAppStore((state) => state.editingComponentId)
+  const pendingComponentType = useAppStore((state) => state.pendingComponentType)
   const selectComponent = useAppStore((state) => state.selectComponent)
   const setEditingComponentId = useAppStore((state) => state.setEditingComponentId)
-  const addComponent = useAppStore((state) => state.addComponent)
+  const placeComponent = useAppStore((state) => state.placeComponent)
   const updateComponent = useAppStore((state) => state.updateComponent)
   const deleteComponent = useAppStore((state) => state.deleteComponent)
   const duplicateComponent = useAppStore((state) => state.duplicateComponent)
@@ -77,12 +85,13 @@ export function BoardCanvas() {
   const [transform, setTransform] = useState<ActiveTransform | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [fitScale, setFitScale] = useState(1)
-  const [manualScale, setManualScale] = useState(1)
-  const [scaleMode, setScaleMode] = useState<'fit' | 'manual'>('fit')
+  const [placement, setPlacement] = useState<PlacementDraft | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+  const activePlacementRef = useRef<ActivePlacement | null>(null)
+  const placementRef = useRef<PlacementDraft | null>(null)
 
   const board = project && activeBoardId ? getBoardById(project, activeBoardId) ?? null : null
-  const scale = scaleMode === 'fit' ? fitScale : manualScale
+  const scale = fitScale
 
   const otherComponents = useMemo(() => {
     if (!board || !selectedComponentId) {
@@ -90,6 +99,10 @@ export function BoardCanvas() {
     }
     return board.components.filter((item) => item.id !== selectedComponentId)
   }, [board, selectedComponentId])
+
+  useEffect(() => {
+    placementRef.current = placement
+  }, [placement])
 
   useEffect(() => {
     if (!project) {
@@ -104,17 +117,7 @@ export function BoardCanvas() {
         return
       }
 
-      const availableWidth = Math.max(stage.clientWidth - STAGE_PADDING, 0)
-      const availableHeight = Math.max(stage.clientHeight - STAGE_PADDING, 0)
-      const nextScale = clampZoom(
-        Math.min(
-          1,
-          availableWidth / boardSize.width,
-          availableHeight / boardSize.height,
-        ),
-      )
-
-      setFitScale(nextScale)
+      setFitScale(getBoardFitScale(boardSize, stage.clientWidth, stage.clientHeight))
     }
 
     updateFitScale()
@@ -125,6 +128,54 @@ export function BoardCanvas() {
 
     return () => observer.disconnect()
   }, [project])
+
+  useEffect(() => {
+    if (!pendingComponentType) {
+      setPlacement(null)
+      activePlacementRef.current = null
+      return
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      const activePlacement = activePlacementRef.current
+      if (!activePlacement) {
+        return
+      }
+
+      const currentX = (event.clientX - activePlacement.rect.left) / activePlacement.scale
+      const currentY = (event.clientY - activePlacement.rect.top) / activePlacement.scale
+      const x = Math.min(activePlacement.startX, currentX)
+      const y = Math.min(activePlacement.startY, currentY)
+      const width = Math.abs(currentX - activePlacement.startX)
+      const height = Math.abs(currentY - activePlacement.startY)
+
+      setPlacement({ x, y, width, height })
+    }
+
+    function handlePointerUp() {
+      const activePlacement = activePlacementRef.current
+      const draft = placementRef.current
+      if (!activePlacement || !draft) {
+        activePlacementRef.current = null
+        setPlacement(null)
+        return
+      }
+
+      if (draft.width >= PLACEMENT_DRAG_THRESHOLD && draft.height >= PLACEMENT_DRAG_THRESHOLD) {
+        placeComponent(activePlacement.type, draft)
+      }
+
+      activePlacementRef.current = null
+      setPlacement(null)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [pendingComponentType, placeComponent])
 
   useEffect(() => {
     if (!transform || !project) {
@@ -202,17 +253,28 @@ export function BoardCanvas() {
     return null
   }
 
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    const type = event.dataTransfer.getData('application/x-wireframe-component')
-    if (!type || !(type in COMPONENT_DEFINITIONS)) {
+  const handlePlacementStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !pendingComponentType) {
       return
     }
 
+    event.preventDefault()
     const rect = event.currentTarget.getBoundingClientRect()
-    addComponent(type as keyof typeof COMPONENT_DEFINITIONS, {
-      x: (event.clientX - rect.left) / scale,
-      y: (event.clientY - rect.top) / scale,
+    const startX = (event.clientX - rect.left) / scale
+    const startY = (event.clientY - rect.top) / scale
+
+    activePlacementRef.current = {
+      type: pendingComponentType,
+      scale,
+      rect,
+      startX,
+      startY,
+    }
+    setPlacement({
+      x: startX,
+      y: startY,
+      width: 0,
+      height: 0,
     })
   }
 
@@ -258,33 +320,10 @@ export function BoardCanvas() {
         <div className="canvas-zoom">
           <button
             type="button"
-            className="canvas-zoom__button"
-            aria-label="缩小画板"
-            onClick={() => {
-              setScaleMode('manual')
-              setManualScale(clampZoom(scale - ZOOM_STEP))
-            }}
-          >
-            -
-          </button>
-          <span className="canvas-zoom__value">{Math.round(scale * 100)}%</span>
-          <button
-            type="button"
-            className="canvas-zoom__button"
-            aria-label="放大画板"
-            onClick={() => {
-              setScaleMode('manual')
-              setManualScale(clampZoom(scale + ZOOM_STEP))
-            }}
-          >
-            +
-          </button>
-          <button
-            type="button"
             className="canvas-zoom__button canvas-zoom__button--fit"
-            onClick={() => setScaleMode('fit')}
+            aria-label="当前画板缩放"
           >
-            适应屏幕
+            {Math.round(scale * 100)}%
           </button>
         </div>
       </div>
@@ -310,12 +349,22 @@ export function BoardCanvas() {
               setEditingComponentId(null)
               setContextMenu(null)
             }}
-            onDragOver={(event) => {
-              event.preventDefault()
-              event.dataTransfer.dropEffect = 'copy'
-            }}
-            onDrop={handleDrop}
+            onPointerDown={handlePlacementStart}
           >
+            {placement && pendingComponentType ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: placement.x,
+                  top: placement.y,
+                  width: placement.width,
+                  height: placement.height,
+                  border: '1px dashed #2563eb',
+                  background: 'rgba(37, 99, 235, 0.08)',
+                  pointerEvents: 'none',
+                }}
+              />
+            ) : null}
             {guides.map((guide, index) => (
               <div
                 key={`${guide.orientation}-${guide.position}-${index}`}

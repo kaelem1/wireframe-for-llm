@@ -12,9 +12,7 @@ interface ToolbarProps {
   onProjectNameChange: (value: string) => void
   onExport: () => void
   onImport: () => void
-  onOpenAI: () => void
   onTogglePreview: () => void
-  onOpenSettings: () => void
 }
 
 export function Toolbar(props: ToolbarProps) {
@@ -26,9 +24,7 @@ export function Toolbar(props: ToolbarProps) {
     onProjectNameChange,
     onExport,
     onImport,
-    onOpenAI,
     onTogglePreview,
-    onOpenSettings,
   } = props
 
   return (
@@ -53,14 +49,8 @@ export function Toolbar(props: ToolbarProps) {
         <button type="button" className="toolbar__button" onClick={onImport}>
           导入 JSON
         </button>
-        <button type="button" className="toolbar__button" onClick={onOpenAI}>
-          AI 生成
-        </button>
         <button type="button" className="toolbar__button toolbar__button--primary" onClick={onTogglePreview}>
           {isPreview ? '退出预览' : '预览'}
-        </button>
-        <button type="button" className="toolbar__button" onClick={onOpenSettings}>
-          设置
         </button>
       </div>
     </header>
