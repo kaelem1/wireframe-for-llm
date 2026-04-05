@@ -141,7 +141,9 @@ body {
 }
 
 .workspace__center {
+  display: flex;
   min-width: 0;
+  min-height: 0;
   padding: 20px;
 }
 
@@ -192,15 +194,51 @@ body {
 .canvas-shell {
   display: flex;
   height: 100%;
+  width: 100%;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
+  min-height: 0;
 }
 
 .canvas-header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
   color: #6b7280;
   font-size: 13px;
+}
+
+.canvas-header__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.canvas-zoom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.canvas-zoom__button {
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111827;
+  border: 1px solid #dbe3ef;
+}
+
+.canvas-zoom__button--fit {
+  padding-inline: 12px;
+}
+
+.canvas-zoom__value {
+  min-width: 48px;
+  text-align: center;
+  font-weight: 600;
+  color: #111827;
 }
 
 .canvas-stage {
@@ -208,12 +246,19 @@ body {
   flex: 1;
   align-items: center;
   justify-content: center;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
   border-radius: 24px;
   background:
     linear-gradient(45deg, rgba(15, 98, 254, 0.03), rgba(15, 98, 254, 0)),
     #f1f5f9;
   padding: 24px;
+}
+
+.canvas-stage__viewport {
+  position: relative;
+  flex: none;
 }
 
 .board-canvas,
