@@ -1,15 +1,14 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前顶部只保留设备、导入导出与预览动作，不再承接项目名输入
+3. 更新后检查所属 `.folder.md`
 */
 
 interface ToolbarProps {
-  projectName: string
   deviceLabel: string
   boardSizeLabel: string
   isPreview: boolean
-  onProjectNameChange: (value: string) => void
   onExport: () => void
   onImport: () => void
   onTogglePreview: () => void
@@ -17,11 +16,9 @@ interface ToolbarProps {
 
 export function Toolbar(props: ToolbarProps) {
   const {
-    projectName,
     deviceLabel,
     boardSizeLabel,
     isPreview,
-    onProjectNameChange,
     onExport,
     onImport,
     onTogglePreview,
@@ -30,12 +27,6 @@ export function Toolbar(props: ToolbarProps) {
   return (
     <header className="toolbar">
       <div className="toolbar__identity">
-        <input
-          className="toolbar__project-name"
-          value={projectName}
-          onChange={(event) => onProjectNameChange(event.target.value)}
-          aria-label="项目名称"
-        />
         <div className="toolbar__device">
           <span>{deviceLabel}</span>
           <span>{boardSizeLabel}</span>

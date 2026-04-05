@@ -2,7 +2,8 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前收敛为单一线框工作区样式，并保留框选与图层拖拽反馈
-3. 更新后检查所属 `.folder.md`
+3. 左栏仅保留项目名与组件网格，toolbar 不再展示项目名输入
+4. 更新后检查所属 `.folder.md`
 */
 
 :root {
@@ -75,17 +76,6 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.toolbar__project-name {
-  min-width: 180px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  padding: 8px 10px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
 }
 
 .toolbar__device {
@@ -183,6 +173,23 @@ body {
   color: #6b7280;
 }
 
+.panel__header--palette .panel__eyebrow {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.panel__project-name {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  outline: none;
+}
+
 .panel__editor {
   display: grid;
   align-content: start;
@@ -257,18 +264,6 @@ body {
   font-size: 13px;
   font-weight: 700;
   color: #111827;
-}
-
-.palette-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.palette-footer__count {
-  font-size: 12px;
-  color: #52525b;
 }
 
 .canvas-shell {

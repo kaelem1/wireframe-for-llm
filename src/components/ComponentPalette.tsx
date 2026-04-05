@@ -1,8 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前左栏统一为组件库与页面意图区，移除模式切换与尺寸备注
-3. 当前按 ComponentCatalogItem 渲染等宽网格项
+2. 当前左栏仅保留项目名与组件网格，移除 purpose、新建页与底栏操作
+3. 当前按 ComponentCatalogItem 渲染等宽网格项，并保持待放置组件持续选中
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -11,40 +11,22 @@ import { useAppStore } from '../stores/appStore'
 
 export function ComponentPalette() {
   const project = useAppStore((state) => state.project)
-  const activeBoardId = useAppStore((state) => state.activeBoardId)
   const pendingComponentType = useAppStore((state) => state.pendingComponentType)
-  const wireframe = useAppStore((state) => state.wireframe)
+  const setProjectName = useAppStore((state) => state.setProjectName)
   const setPendingComponentType = useAppStore((state) => state.setPendingComponentType)
-  const startWireframePage = useAppStore((state) => state.startWireframePage)
-  const clearActiveBoardComponents = useAppStore((state) => state.clearActiveBoardComponents)
-  const setWireframePurpose = useAppStore((state) => state.setWireframePurpose)
-
-  const activeBoard =
-    project && activeBoardId ? project.boards.find((board) => board.id === activeBoardId) ?? null : null
-  const placedCount = activeBoard?.components.length ?? 0
 
   return (
     <div className="panel panel--palette">
       <div className="panel__header panel__header--palette">
-        <div>
-          <div className="panel__eyebrow">Component library</div>
-          <h2>Components</h2>
+        <div className="panel__eyebrow">
+          <input
+            className="panel__project-name"
+            value={project?.project ?? ''}
+            aria-label="项目名称"
+            onChange={(event) => setProjectName(event.target.value)}
+          />
         </div>
       </div>
-
-      <button type="button" className="ghost-button" onClick={startWireframePage}>
-        New Page
-      </button>
-
-      <label className="form-field">
-        <span>Purpose</span>
-        <textarea
-          rows={3}
-          value={wireframe.purpose}
-          placeholder="What is this page for?"
-          onChange={(event) => setWireframePurpose(event.target.value)}
-        />
-      </label>
 
       <div className="component-palette">
         {COMPONENT_REGISTRY.map((section) => (
@@ -74,13 +56,6 @@ export function ComponentPalette() {
             </div>
           </section>
         ))}
-      </div>
-
-      <div className="palette-footer">
-        <div className="palette-footer__count">{placedCount} placed</div>
-        <button type="button" className="ghost-button" onClick={clearActiveBoardComponents}>
-          Clear
-        </button>
       </div>
     </div>
   )

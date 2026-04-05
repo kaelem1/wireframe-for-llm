@@ -2,7 +2,8 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前统一画布交互，补齐点击放置、框选多选、八向缩放与空白提示层
-3. 更新后检查所属 `.folder.md`
+3. 空白提示层不再消费 purpose，组件按钮进入连续放置
+4. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
@@ -329,7 +330,6 @@ export function BoardCanvas() {
   const selectedComponentIds = useAppStore((state) => state.selectedComponentIds)
   const editingComponentId = useAppStore((state) => state.editingComponentId)
   const pendingComponentType = useAppStore((state) => state.pendingComponentType)
-  const wireframe = useAppStore((state) => state.wireframe)
   const selectComponent = useAppStore((state) => state.selectComponent)
   const selectComponents = useAppStore((state) => state.selectComponents)
   const setEditingComponentId = useAppStore((state) => state.setEditingComponentId)
@@ -695,7 +695,7 @@ export function BoardCanvas() {
             {board.components.length === 0 ? (
               <div className="canvas-empty-state">
                 <div className="canvas-empty-state__eyebrow">New Page</div>
-                <strong>{wireframe.purpose || 'Pick a component and click or drag on canvas.'}</strong>
+                <strong>Pick a component and click or drag on canvas.</strong>
                 <span>单击使用默认尺寸落组件，拖拽按框选尺寸落组件。</span>
               </div>
             ) : null}

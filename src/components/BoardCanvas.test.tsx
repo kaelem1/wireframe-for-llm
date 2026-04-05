@@ -2,7 +2,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前覆盖统一画布模式、组件放置、多选框选、图层拖拽、fit 缩放、预览交互与画板重名回归
+2. 当前覆盖统一画布模式、顶部项目名迁移、左栏精简、组件放置、多选框选、图层拖拽、fit 缩放、预览交互与画板重名回归
 3. 更新后检查所属 `.folder.md`
 */
 
@@ -84,6 +84,13 @@ describe('BoardCanvas', () => {
     expect(paletteRule).toContain('min-height: 0;')
     expect(paletteRule).toContain('overflow: auto;')
     expect(gridRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));')
+    expect(screen.queryByRole('heading', { name: 'Components' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New Page' })).toBeNull()
+    expect(screen.queryByText('Purpose')).toBeNull()
+    expect(container.querySelector('.palette-footer')).toBeNull()
+    expect(container.querySelector('.toolbar .toolbar__project-name')).toBeNull()
+    expect(screen.getAllByLabelText('项目名称')).toHaveLength(1)
+    expect(container.querySelector('.panel__eyebrow .panel__project-name')).not.toBeNull()
     expect(screen.getByRole('button', { name: /^Button$/i })).toBeTruthy()
     expect(screen.queryByText('140 × 40')).toBeNull()
   })
@@ -316,6 +323,64 @@ describe('BoardCanvas', () => {
     fireEvent.click(block as Element)
 
     expect(useAppStore.getState().selectedComponentId).toBe(component.id)
+  })
+
+  it('keeps the chosen palette component active until toggled off or another component is selected', () => {
+    const project = createProject('测试项目', 'Desktop')
+    const board = project.boards[0]
+    board.components.push(createComponent('Card', board, project.boardSize, { x: 48, y: 48 }))
+    useAppStore.getState().replaceProject(project)
+
+    const { container } = render(<App />)
+    const paletteButton = screen.getByRole('button', { name: /^Button$/i })
+    const canvas = container.querySelector('.board-canvas') as HTMLDivElement | null
+
+    expect(canvas).not.toBeNull()
+
+    fireEvent.click(paletteButton)
+
+    expect(paletteButton.className).toContain('is-active')
+    expect(useAppStore.getState().pendingComponentType).toBe('button')
+
+    const scale = Number(canvas?.style.transform.replace('scale(', '').replace(')', ''))
+
+    fireEvent.pointerDown(canvas as Element, {
+      button: 0,
+      clientX: 220 * scale,
+      clientY: 220 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 220 * scale,
+      clientY: 220 * scale,
+    })
+
+    expect(paletteButton.className).toContain('is-active')
+    expect(useAppStore.getState().pendingComponentType).toBe('button')
+
+    const existingBlock = container.querySelector('.wireframe-block')
+
+    expect(existingBlock).not.toBeNull()
+
+    fireEvent.pointerDown(existingBlock as Element, {
+      button: 0,
+      clientX: 60,
+      clientY: 60,
+    })
+    fireEvent.click(existingBlock as Element)
+
+    expect(paletteButton.className).not.toContain('is-active')
+    expect(useAppStore.getState().pendingComponentType).toBeNull()
+
+    fireEvent.click(paletteButton)
+    expect(paletteButton.className).toContain('is-active')
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(paletteButton.className).toContain('is-active')
+    expect(useAppStore.getState().pendingComponentType).toBe('button')
+
+    fireEvent.click(paletteButton)
+    expect(paletteButton.className).not.toContain('is-active')
+    expect(useAppStore.getState().pendingComponentType).toBeNull()
   })
 
   it('runs tap interactions in preview when clicking the component label', () => {
