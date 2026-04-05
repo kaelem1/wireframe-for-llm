@@ -2,7 +2,8 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前包含项目导出扩展、fit 缩放与放置/命名辅助
-3. 更新后检查所属 `.folder.md`
+3. 组件归一化仅做边界与最小尺寸约束，不再锁死特定组件的位置或宽度
+4. 更新后检查所属 `.folder.md`
 */
 
 import {
@@ -179,30 +180,13 @@ export function createComponent(
 
 export function normalizeComponent(component: ProtoComponent, boardSize: BoardSize): ProtoComponent {
   const meta = COMPONENT_META_MAP[component.type]
-  const width = meta.fullWidth
-    ? boardSize.width
-    : clamp(component.width, meta.minWidth, boardSize.width)
+  const width = clamp(component.width, meta.minWidth, boardSize.width)
   const height = clamp(component.height, meta.minHeight, boardSize.height)
   const maxX = Math.max(0, boardSize.width - width)
   const maxY = Math.max(0, boardSize.height - height)
 
   let x = clamp(snap(component.x), 0, maxX)
   let y = clamp(snap(component.y), 0, maxY)
-
-  if (meta.anchor === 'top') {
-    x = 0
-    y = 0
-  }
-
-  if (meta.anchor === 'bottom') {
-    x = 0
-    y = boardSize.height - height
-  }
-
-  if (component.type === 'Modal') {
-    x = clamp(snap(component.x), 0, maxX)
-    y = clamp(snap(component.y), 0, maxY)
-  }
 
   return {
     ...component,
@@ -228,6 +212,27 @@ export function duplicateComponent(component: ProtoComponent, boardSize: BoardSi
     },
     boardSize,
   )
+}
+
+export function duplicateBoard(project: ProjectData, boardId: string): Board | null {
+  const source = getBoardById(project, boardId)
+
+  if (!source) {
+    return null
+  }
+
+  return {
+    id: createId('board'),
+    name: getNextBoardCopyName(project, source.name),
+    components: source.components.map((component) => ({
+      ...component,
+      id: createId('comp'),
+      interactions: component.interactions.map((interaction) => ({
+        ...interaction,
+        id: createId('interaction'),
+      })),
+    })),
+  }
 }
 
 export function getBoardById(project: ProjectData, boardId: string) {
@@ -258,6 +263,22 @@ export function getNextBoardName(project: ProjectData) {
   }
 
   return `画板${index}`
+}
+
+function getNextBoardCopyName(project: ProjectData, name: string) {
+  const baseName = `${name} 副本`
+
+  if (!project.boards.some((board) => board.name === baseName)) {
+    return baseName
+  }
+
+  let index = 2
+
+  while (project.boards.some((board) => board.name === `${baseName} ${index}`)) {
+    index += 1
+  }
+
+  return `${baseName} ${index}`
 }
 
 export function getPlacedComponentFrame(

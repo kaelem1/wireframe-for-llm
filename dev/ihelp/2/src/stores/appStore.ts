@@ -4,7 +4,8 @@
 2. 当前把单一 wireframe 工作态、编辑命令与多选状态并入同一 store
 3. 画布始终运行在线框编辑态，不再维护 on/off 双快照切换
 4. 待放置组件持续保留，直到显式切换、取消或选中画布组件
-5. 更新后检查所属 `.folder.md`
+5. 当前支持画板整板复制
+6. 更新后检查所属 `.folder.md`
 */
 
 import { applyPatches, enablePatches, produceWithPatches, type Patch } from 'immer'
@@ -16,6 +17,7 @@ import {
   createComponent,
   createId,
   createProject,
+  duplicateBoard,
   duplicateComponent,
   exportProjectJson,
   findComponentById,
@@ -104,6 +106,7 @@ type StoreState = {
   setEditingComponentId: (componentId: string | null) => void
   setPendingComponentType: (type: ComponentType | null) => void
   addBoard: () => void
+  duplicateBoard: (boardId: string) => void
   deleteBoard: (boardId: string) => void
   reorderBoards: (fromIndex: number, toIndex: number) => void
   updateBoardName: (boardId: string, name: string) => void
@@ -339,6 +342,20 @@ export const useAppStore = create<StoreState>((set, get) => {
           return
         }
         const board = createBoard(getNextBoardName(draft.project))
+        draft.project.boards.push(board)
+        draft.activeBoardId = board.id
+        draft.selectedComponentId = null
+        draft.selectedComponentIds = []
+      }),
+    duplicateBoard: (boardId) =>
+      commit((draft) => {
+        if (!draft.project) {
+          return
+        }
+        const board = duplicateBoard(draft.project, boardId)
+        if (!board) {
+          return
+        }
         draft.project.boards.push(board)
         draft.activeBoardId = board.id
         draft.selectedComponentId = null

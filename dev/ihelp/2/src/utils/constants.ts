@@ -346,15 +346,15 @@ export const COMPONENT_META_MAP = [...COMPONENT_METAS, ...LEGACY_COMPONENT_METAS
 )
 
 export const INTERACTION_TRIGGER_OPTIONS = [
-  { label: '点击', value: 'tap' },
-  { label: '长按', value: 'longPress' },
-  { label: '滑动', value: 'swipe' },
+  { label: 'Tap', value: 'tap' },
+  { label: 'Long Press', value: 'longPress' },
+  { label: 'Swipe', value: 'swipe' },
 ] as const
 
 export const INTERACTION_ACTION_OPTIONS = [
-  { label: '跳转', value: 'navigate' },
-  { label: '返回', value: 'back' },
-  { label: '显示弹窗', value: 'showModal' },
+  { label: 'Navigate', value: 'navigate' },
+  { label: 'Back', value: 'back' },
+  { label: 'Show Modal', value: 'showModal' },
 ] as const
 
 export const DEVICE_PRESETS = DEVICE_OPTIONS.map((item) => ({
