@@ -1,7 +1,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前补齐 wireframe 画布的空白提示层、选中框、八向缩放与尺寸提示样式
+2. 当前收敛为单一线框工作区样式，并保留框选与图层拖拽反馈
 3. 更新后检查所属 `.folder.md`
 */
 
@@ -175,6 +175,14 @@ body {
   color: #111827;
 }
 
+.panel__eyebrow {
+  margin-bottom: 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
 .panel__editor {
   display: grid;
   align-content: start;
@@ -216,10 +224,22 @@ body {
   padding-right: 4px;
 }
 
+.component-palette__section {
+  display: grid;
+  gap: 8px;
+}
+
+.component-palette__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .component-palette__item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  width: 100%;
+  min-width: 0;
   border-radius: 12px;
   padding: 12px;
   background: #fcfcfb;
@@ -227,12 +247,28 @@ body {
   text-align: left;
 }
 
-.component-palette__icon {
-  display: inline-flex;
-  width: 24px;
-  justify-content: center;
-  color: #111827;
+.component-palette__item.is-active {
+  border-color: #111827;
+  background: #ececec;
+}
+
+.component-palette__label {
+  min-width: 0;
+  font-size: 13px;
   font-weight: 700;
+  color: #111827;
+}
+
+.palette-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.palette-footer__count {
+  font-size: 12px;
+  color: #52525b;
 }
 
 .canvas-shell {
@@ -240,49 +276,8 @@ body {
   height: 100%;
   width: 100%;
   flex-direction: column;
-  gap: 12px;
   min-width: 0;
   min-height: 0;
-}
-
-.canvas-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: #52525b;
-  font-size: 13px;
-}
-
-.canvas-header__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.canvas-zoom {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.canvas-zoom__button {
-  border-radius: 10px;
-  padding: 8px 10px;
-  background: #fafaf9;
-  color: #111827;
-  border: 1px solid #cfcfcf;
-}
-
-.canvas-zoom__button--fit {
-  padding-inline: 12px;
-}
-
-.canvas-zoom__value {
-  min-width: 48px;
-  text-align: center;
-  font-weight: 600;
-  color: #111827;
 }
 
 .canvas-stage {
@@ -334,15 +329,6 @@ body {
 
 .board-canvas--wireframe {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 250, 251, 0.96));
-}
-
-.board-canvas__wash {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.02)),
-    radial-gradient(circle at top right, rgba(15, 23, 42, 0.08), transparent 42%);
-  pointer-events: none;
 }
 
 .canvas-empty-state {
@@ -469,16 +455,12 @@ body {
   height: 1px;
 }
 
-.canvas-size-indicator {
+.canvas-marquee {
   position: absolute;
   z-index: 5;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #111827;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  transform: translate(-50%, -100%);
+  border: 1px solid rgba(17, 24, 39, 0.55);
+  border-radius: 8px;
+  background: rgba(17, 24, 39, 0.08);
   pointer-events: none;
 }
 
@@ -602,11 +584,16 @@ body {
 
 .layer-item {
   text-align: left;
+  cursor: grab;
 }
 
 .layer-item.is-active {
   border-color: #111827;
   background: #ececec;
+}
+
+.layer-item:active {
+  cursor: grabbing;
 }
 
 .layer-item small {
@@ -934,6 +921,10 @@ body {
 
   .workspace__center {
     min-height: 520px;
+  }
+
+  .component-palette__grid {
+    grid-template-columns: 1fr;
   }
 
   .panel {

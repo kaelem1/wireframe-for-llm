@@ -1,1 +1,1 @@
-已接入 agentation 式 wireframe mode：L 切换、分组组件目录、purpose/opacity、空白画布点击/拖拽放置；build 通过，agent-browser 已验到页面加载与模式切换。
+已合并 wireframe on/off；删 canvas header 与 opacity；palette 改为等宽名称网格；画布支持框选多选；图层可拖拽排序；测试与 build 通过。

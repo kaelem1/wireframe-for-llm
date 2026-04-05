@@ -2,7 +2,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前覆盖 wireframe 点击放置、拖拽定尺寸、fit 缩放、预览交互与画板重名回归
+2. 当前覆盖统一画布模式、组件放置、多选框选、图层拖拽、fit 缩放、预览交互与画板重名回归
 3. 更新后检查所属 `.folder.md`
 */
 
@@ -14,6 +14,7 @@ import App from '../App'
 import { BoardCanvas } from './BoardCanvas'
 import { BoardStrip } from './BoardStrip'
 import { ComponentPalette } from './ComponentPalette'
+import { InteractionPanel } from './InteractionPanel'
 import { PreviewOverlay } from './PreviewOverlay'
 import { useAppStore } from '../stores/appStore'
 import { createBoard, createComponent, createProject, createId } from '../utils/project'
@@ -76,17 +77,33 @@ describe('BoardCanvas', () => {
     const { container } = render(<App />)
     const palette = container.querySelector('.component-palette')
     const paletteRule = appStyles.match(/\.component-palette\s*\{[^}]*\}/)?.[0] ?? ''
+    const gridRule = appStyles.match(/\.component-palette__grid\s*\{[^}]*\}/)?.[0] ?? ''
 
     expect(palette).not.toBeNull()
     expect(paletteRule).toContain('flex: 1;')
     expect(paletteRule).toContain('min-height: 0;')
     expect(paletteRule).toContain('overflow: auto;')
+    expect(gridRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));')
+    expect(screen.getByRole('button', { name: /^Button$/i })).toBeTruthy()
+    expect(screen.queryByText('140 × 40')).toBeNull()
   })
 
-  it('places a component at default size when clicking the canvas in wireframe mode', () => {
+  it('uses a unified workspace without wireframe-only controls or canvas header', () => {
     const project = createProject('测试项目', 'iPhone')
     useAppStore.getState().replaceProject(project)
-    useAppStore.getState().setWireframeMode(true)
+
+    const { container } = render(<App />)
+
+    expect(screen.getByText('图层')).toBeTruthy()
+    expect(screen.queryByText('Canvas Opacity')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'On' })).toBeNull()
+    expect(container.querySelector('.canvas-header')).toBeNull()
+    expect(container.querySelector('.board-canvas__wash')).toBeNull()
+  })
+
+  it('places a component at default size when clicking the canvas', () => {
+    const project = createProject('测试项目', 'iPhone')
+    useAppStore.getState().replaceProject(project)
 
     const { container } = render(
       <>
@@ -104,7 +121,7 @@ describe('BoardCanvas', () => {
       (canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /^BtnButton140 × 40$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Button$/i }))
 
     fireEvent.pointerDown(canvas as Element, {
       button: 0,
@@ -125,10 +142,9 @@ describe('BoardCanvas', () => {
     expect(placed?.height).toBe(40)
   })
 
-  it('draws a custom frame when dragging on the canvas in wireframe mode', () => {
+  it('draws a custom frame when dragging on the canvas without pixel annotations', () => {
     const project = createProject('测试项目', 'iPhone')
     useAppStore.getState().replaceProject(project)
-    useAppStore.getState().setWireframeMode(true)
 
     const { container } = render(
       <>
@@ -146,7 +162,7 @@ describe('BoardCanvas', () => {
       (canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /^BtnButton140 × 40$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Button$/i }))
 
     fireEvent.pointerDown(canvas as Element, {
       button: 0,
@@ -162,6 +178,9 @@ describe('BoardCanvas', () => {
       clientY: 120 * scale,
     })
 
+    expect(container.querySelector('.canvas-size-indicator')).toBeNull()
+    expect(screen.queryByText('140 × 40')).toBeNull()
+
     const placed = useAppStore.getState().project?.boards[0]?.components[0]
 
     expect(placed?.type).toBe('button')
@@ -169,6 +188,97 @@ describe('BoardCanvas', () => {
     expect(placed?.y).toBe(56)
     expect(placed?.width).toBe(184)
     expect(placed?.height).toBeCloseTo(64)
+  })
+
+  it('allows marquee-selecting multiple components', () => {
+    const project = createProject('测试项目', 'iPhone')
+    const board = project.boards[0]
+    board.components.push(
+      createComponent('Card', board, project.boardSize, { x: 48, y: 56 }),
+      createComponent('Button', board, project.boardSize, { x: 176, y: 64 }),
+    )
+    useAppStore.getState().replaceProject(project)
+
+    const { container } = render(<BoardCanvas />)
+    const canvas = container.querySelector('.board-canvas')
+
+    expect(canvas).not.toBeNull()
+
+    const scale = Number(
+      (canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''),
+    )
+
+    fireEvent.pointerDown(canvas as Element, {
+      button: 0,
+      clientX: 32 * scale,
+      clientY: 40 * scale,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 336 * scale,
+      clientY: 344 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 336 * scale,
+      clientY: 344 * scale,
+    })
+
+    expect(container.querySelectorAll('.wireframe-block.is-selected')).toHaveLength(2)
+  })
+
+  it('moves marquee-selected components as a group', () => {
+    const project = createProject('测试项目', 'iPhone')
+    const board = project.boards[0]
+    const first = createComponent('Card', board, project.boardSize, { x: 48, y: 56 })
+    first.name = 'First'
+    const second = createComponent('Button', board, project.boardSize, { x: 176, y: 64 })
+    second.name = 'Second'
+    board.components.push(first, second)
+    useAppStore.getState().replaceProject(project)
+
+    const { container } = render(<BoardCanvas />)
+    const canvas = container.querySelector('.board-canvas')
+
+    expect(canvas).not.toBeNull()
+
+    const scale = Number(
+      (canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''),
+    )
+
+    fireEvent.pointerDown(canvas as Element, {
+      button: 0,
+      clientX: 32 * scale,
+      clientY: 40 * scale,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 336 * scale,
+      clientY: 344 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 336 * scale,
+      clientY: 344 * scale,
+    })
+
+    const blocks = container.querySelectorAll('.wireframe-block')
+    fireEvent.pointerDown(blocks[0], {
+      button: 0,
+      clientX: 64 * scale,
+      clientY: 72 * scale,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 128 * scale,
+      clientY: 104 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 128 * scale,
+      clientY: 104 * scale,
+    })
+
+    const moved = useAppStore.getState().project?.boards[0]?.components ?? []
+
+    expect(moved.map((component) => ({ name: component.name, x: component.x, y: component.y }))).toEqual([
+      { name: 'First', x: 110, y: 88 },
+      { name: 'Second', x: 240, y: 96 },
+    ])
   })
 
   it('keeps canvas fit-to-screen and removes manual zoom controls', () => {
@@ -180,8 +290,9 @@ describe('BoardCanvas', () => {
 
     expect(screen.queryByLabelText('缩小画板')).toBeNull()
     expect(screen.queryByLabelText('放大画板')).toBeNull()
+    expect(screen.queryByLabelText('当前画板缩放')).toBeNull()
     expect(canvas?.style.transform).toBe('scale(0.4666666666666667)')
-    expect(screen.getByText('47%')).toBeTruthy()
+    expect(container.querySelector('.canvas-zoom')).toBeNull()
   })
 
   it('keeps a component selected after clicking it', () => {
@@ -255,5 +366,38 @@ describe('BoardCanvas', () => {
 
     expect(useAppStore.getState().project?.boards.map((item) => item.name)).toEqual(['首页', '详情页'])
     expect((inputs[1] as HTMLInputElement).value).toBe('详情页')
+  })
+
+  it('reorders layers by drag and drop in the layer panel', () => {
+    const project = createProject('测试项目', 'Desktop')
+    const board = project.boards[0]
+    const first = createComponent('Card', board, project.boardSize, { x: 48, y: 48 })
+    first.name = 'First'
+    const second = createComponent('Button', board, project.boardSize, { x: 96, y: 160 })
+    second.name = 'Second'
+    board.components.push(first, second)
+    useAppStore.getState().replaceProject(project)
+
+    render(<InteractionPanel />)
+
+    const items = screen.getAllByRole('button')
+    const dataTransfer = {
+      store: new Map<string, string>(),
+      setData(type: string, value: string) {
+        this.store.set(type, value)
+      },
+      getData(type: string) {
+        return this.store.get(type) ?? ''
+      },
+    }
+
+    fireEvent.dragStart(items[0], { dataTransfer })
+    fireEvent.dragOver(items[1], { dataTransfer })
+    fireEvent.drop(items[1], { dataTransfer })
+
+    expect(useAppStore.getState().project?.boards[0]?.components.map((item) => item.name)).toEqual([
+      'Second',
+      'First',
+    ])
   })
 })

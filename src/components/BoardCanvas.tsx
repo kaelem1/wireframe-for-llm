@@ -1,7 +1,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前恢复 wireframe 画布，并补齐点击放置、拖拽定尺寸、八向缩放与空白提示层
+2. 当前统一画布交互，补齐点击放置、框选多选、八向缩放与空白提示层
 3. 更新后检查所属 `.folder.md`
 */
 
@@ -24,12 +24,6 @@ type Guide = {
   position: number
 }
 
-type SizeIndicator = {
-  x: number
-  y: number
-  text: string
-}
-
 type ResizeHandle = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'
 
 type PlacementDraft = {
@@ -47,14 +41,23 @@ type PlacementSession = {
   startY: number
 }
 
+type SelectionSession = {
+  rect: DOMRect
+  scale: number
+  startX: number
+  startY: number
+}
+
 type TransformSession = {
   mode: 'move' | 'resize'
   componentId: string
+  componentIds: string[]
   rect: DOMRect
   scale: number
   startX: number
   startY: number
   origin: Pick<ProtoComponent, 'x' | 'y' | 'width' | 'height'>
+  origins: Array<Pick<ProtoComponent, 'id' | 'x' | 'y' | 'width' | 'height'>>
   handle?: ResizeHandle
 }
 
@@ -80,6 +83,18 @@ function getPlacementDraft(startX: number, startY: number, currentX: number, cur
     width: Math.abs(currentX - startX),
     height: Math.abs(currentY - startY),
   }
+}
+
+function intersectsSelection(
+  selection: PlacementDraft,
+  component: Pick<ProtoComponent, 'x' | 'y' | 'width' | 'height'>,
+) {
+  return !(
+    component.x + component.width < selection.x ||
+    selection.x + selection.width < component.x ||
+    component.y + component.height < selection.y ||
+    selection.y + selection.height < component.y
+  )
 }
 
 function getGuideTargets(boardSize: { width: number; height: number }, others: ProtoComponent[]) {
@@ -201,7 +216,7 @@ function getResizeFrame(
   const normalized = normalizeComponentFrame(type, rawFrame, boardSize)
   const { xTargets, yTargets } = getGuideTargets(boardSize, others)
   const guides: Guide[] = []
-  let next = { ...normalized }
+  const next = { ...normalized }
 
   if (session.handle?.includes('w')) {
     const snapResult = getBestSnap(
@@ -311,28 +326,33 @@ export function BoardCanvas() {
   const project = useAppStore((state) => state.project)
   const activeBoardId = useAppStore((state) => state.activeBoardId)
   const selectedComponentId = useAppStore((state) => state.selectedComponentId)
+  const selectedComponentIds = useAppStore((state) => state.selectedComponentIds)
   const editingComponentId = useAppStore((state) => state.editingComponentId)
   const pendingComponentType = useAppStore((state) => state.pendingComponentType)
   const wireframe = useAppStore((state) => state.wireframe)
   const selectComponent = useAppStore((state) => state.selectComponent)
+  const selectComponents = useAppStore((state) => state.selectComponents)
   const setEditingComponentId = useAppStore((state) => state.setEditingComponentId)
   const setPendingComponentType = useAppStore((state) => state.setPendingComponentType)
   const addComponent = useAppStore((state) => state.addComponent)
   const placeComponent = useAppStore((state) => state.placeComponent)
   const updateComponent = useAppStore((state) => state.updateComponent)
+  const updateComponentFrames = useAppStore((state) => state.updateComponentFrames)
   const deleteComponent = useAppStore((state) => state.deleteComponent)
   const duplicateComponent = useAppStore((state) => state.duplicateComponent)
 
   const [fitScale, setFitScale] = useState(1)
   const [guides, setGuides] = useState<Guide[]>([])
-  const [sizeIndicator, setSizeIndicator] = useState<SizeIndicator | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [placementDraft, setPlacementDraft] = useState<PlacementDraft | null>(null)
+  const [selectionDraft, setSelectionDraft] = useState<PlacementDraft | null>(null)
   const [transformSession, setTransformSession] = useState<TransformSession | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
   const placementSessionRef = useRef<PlacementSession | null>(null)
   const placementDraftRef = useRef<PlacementDraft | null>(null)
+  const selectionSessionRef = useRef<SelectionSession | null>(null)
+  const selectionDraftRef = useRef<PlacementDraft | null>(null)
 
   const board = project && activeBoardId ? getBoardById(project, activeBoardId) ?? null : null
   const selectedComponent = useMemo(
@@ -340,14 +360,17 @@ export function BoardCanvas() {
     [board, selectedComponentId],
   )
   const otherComponents = useMemo(
-    () =>
-      board?.components.filter((component) => component.id !== selectedComponentId) ?? [],
-    [board, selectedComponentId],
+    () => board?.components.filter((component) => !selectedComponentIds.includes(component.id)) ?? [],
+    [board, selectedComponentIds],
   )
 
   useEffect(() => {
     placementDraftRef.current = placementDraft
   }, [placementDraft])
+
+  useEffect(() => {
+    selectionDraftRef.current = selectionDraft
+  }, [selectionDraft])
 
   useEffect(() => {
     if (!project) {
@@ -374,7 +397,6 @@ export function BoardCanvas() {
   useEffect(() => {
     if (!pendingComponentType) {
       placementSessionRef.current = null
-      setPlacementDraft(null)
     }
   }, [pendingComponentType])
 
@@ -390,13 +412,7 @@ export function BoardCanvas() {
       }
 
       const point = getBoardPoint(session.rect, session.scale, event.clientX, event.clientY)
-      const nextDraft = getPlacementDraft(session.startX, session.startY, point.x, point.y)
-      setPlacementDraft(nextDraft)
-      setSizeIndicator({
-        x: nextDraft.x + nextDraft.width / 2,
-        y: Math.max(nextDraft.y - 12, 12),
-        text: `${Math.round(nextDraft.width)} × ${Math.round(nextDraft.height)}`,
-      })
+      setPlacementDraft(getPlacementDraft(session.startX, session.startY, point.x, point.y))
     }
 
     const handlePointerUp = (event: PointerEvent) => {
@@ -419,7 +435,6 @@ export function BoardCanvas() {
 
       placementSessionRef.current = null
       setPlacementDraft(null)
-      setSizeIndicator(null)
     }
 
     window.addEventListener('pointermove', handlePointerMove)
@@ -429,6 +444,47 @@ export function BoardCanvas() {
       window.removeEventListener('pointerup', handlePointerUp)
     }
   }, [addComponent, pendingComponentType, placeComponent, project])
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const session = selectionSessionRef.current
+      if (!session) {
+        return
+      }
+
+      const point = getBoardPoint(session.rect, session.scale, event.clientX, event.clientY)
+      setSelectionDraft(getPlacementDraft(session.startX, session.startY, point.x, point.y))
+    }
+
+    const handlePointerUp = () => {
+      const session = selectionSessionRef.current
+      const draft = selectionDraftRef.current
+      if (!session) {
+        return
+      }
+
+      if (
+        draft &&
+        (draft.width >= PLACEMENT_DRAG_THRESHOLD || draft.height >= PLACEMENT_DRAG_THRESHOLD)
+      ) {
+        selectComponents(
+          board?.components
+            .filter((component) => intersectsSelection(draft, component))
+            .map((component) => component.id) ?? [],
+        )
+      }
+
+      selectionSessionRef.current = null
+      setSelectionDraft(null)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [board?.components, selectComponents])
 
   useEffect(() => {
     if (!transformSession || !project) {
@@ -445,6 +501,27 @@ export function BoardCanvas() {
       const deltaY = (event.clientY - transformSession.startY) / transformSession.scale
 
       if (transformSession.mode === 'move') {
+        if (transformSession.componentIds.length > 1) {
+          const minX = Math.min(...transformSession.origins.map((item) => item.x))
+          const minY = Math.min(...transformSession.origins.map((item) => item.y))
+          const maxX = Math.max(...transformSession.origins.map((item) => item.x + item.width))
+          const maxY = Math.max(...transformSession.origins.map((item) => item.y + item.height))
+          const boundedDeltaX = clamp(deltaX, -minX, project.boardSize.width - maxX)
+          const boundedDeltaY = clamp(deltaY, -minY, project.boardSize.height - maxY)
+
+          updateComponentFrames(
+            transformSession.origins.map((item) => ({
+              id: item.id,
+              x: item.x + boundedDeltaX,
+              y: item.y + boundedDeltaY,
+              width: item.width,
+              height: item.height,
+            })),
+          )
+          setGuides([])
+          return
+        }
+
         const moved = {
           x: transformSession.origin.x + deltaX,
           y: transformSession.origin.y + deltaY,
@@ -455,11 +532,6 @@ export function BoardCanvas() {
         const snapped = getMoveFrame(normalized, project.boardSize, otherComponents)
         updateComponent(found.component.id, snapped.frame)
         setGuides(snapped.guides)
-        setSizeIndicator({
-          x: snapped.frame.x + snapped.frame.width / 2,
-          y: Math.max(snapped.frame.y - 12, 12),
-          text: `${Math.round(snapped.frame.width)} × ${Math.round(snapped.frame.height)}`,
-        })
         return
       }
 
@@ -473,17 +545,11 @@ export function BoardCanvas() {
       )
       updateComponent(found.component.id, resized.frame)
       setGuides(resized.guides)
-      setSizeIndicator({
-        x: resized.frame.x + resized.frame.width / 2,
-        y: Math.max(resized.frame.y - 12, 12),
-        text: `${Math.round(resized.frame.width)} × ${Math.round(resized.frame.height)}`,
-      })
     }
 
     const handlePointerUp = () => {
       setTransformSession(null)
       setGuides([])
-      setSizeIndicator(null)
     }
 
     window.addEventListener('pointermove', handlePointerMove)
@@ -492,7 +558,7 @@ export function BoardCanvas() {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [otherComponents, project, transformSession, updateComponent])
+  }, [otherComponents, project, transformSession, updateComponent, updateComponentFrames])
 
   if (!project || !board) {
     return null
@@ -517,6 +583,24 @@ export function BoardCanvas() {
     setContextMenu(null)
   }
 
+  const startSelection = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const point = getBoardPoint(rect, scale, event.clientX, event.clientY)
+    selectionSessionRef.current = {
+      rect,
+      scale,
+      startX: point.x,
+      startY: point.y,
+    }
+    selectComponents([])
+    setEditingComponentId(null)
+    setContextMenu(null)
+  }
+
   const startTransform = (
     componentId: string,
     event: ReactPointerEvent<HTMLElement>,
@@ -532,15 +616,35 @@ export function BoardCanvas() {
       return
     }
 
+    const componentIds =
+      mode === 'move' && selectedComponentIds.includes(componentId) && selectedComponentIds.length > 1
+        ? selectedComponentIds
+        : [componentId]
+    const origins = componentIds
+      .map((id) => findComponentById(project, id))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .map(({ component }) => ({
+        id: component.id,
+        x: component.x,
+        y: component.y,
+        width: component.width,
+        height: component.height,
+      }))
+
     event.preventDefault()
     event.stopPropagation()
-    selectComponent(componentId)
+    if (componentIds.length > 1) {
+      selectComponents(componentIds)
+    } else {
+      selectComponent(componentId)
+    }
     setEditingComponentId(null)
     setContextMenu(null)
 
     setTransformSession({
       mode,
       componentId,
+      componentIds,
       rect: boardRef.current.getBoundingClientRect(),
       scale,
       startX: event.clientX,
@@ -551,30 +655,13 @@ export function BoardCanvas() {
         width: found.component.width,
         height: found.component.height,
       },
+      origins,
       handle,
     })
   }
 
   return (
     <div className="canvas-shell">
-      <div className="canvas-header">
-        <div className="canvas-header__meta">
-          <span>{wireframe.enabled ? 'Wireframe canvas' : board.name}</span>
-          <span>{project.boardSize.width} × {project.boardSize.height}</span>
-          {wireframe.enabled ? <span>{board.components.length} placed</span> : null}
-        </div>
-
-        <div className="canvas-zoom">
-          <button
-            type="button"
-            className="canvas-zoom__button canvas-zoom__button--fit"
-            aria-label="当前画板缩放"
-          >
-            {Math.round(scale * 100)}%
-          </button>
-        </div>
-      </div>
-
       <div className="canvas-stage" ref={stageRef}>
         <div
           className="canvas-stage__viewport"
@@ -585,7 +672,7 @@ export function BoardCanvas() {
         >
           <div
             ref={boardRef}
-            className={wireframe.enabled ? 'board-canvas board-canvas--wireframe' : 'board-canvas'}
+            className="board-canvas board-canvas--wireframe"
             style={{
               width: project.boardSize.width,
               height: project.boardSize.height,
@@ -602,18 +689,12 @@ export function BoardCanvas() {
                 return
               }
 
-              selectComponent(null)
-              setEditingComponentId(null)
-              setContextMenu(null)
+              startSelection(event)
             }}
           >
-            {wireframe.enabled ? (
-              <div className="board-canvas__wash" style={{ opacity: wireframe.opacity }} />
-            ) : null}
-
-            {wireframe.enabled && board.components.length === 0 ? (
+            {board.components.length === 0 ? (
               <div className="canvas-empty-state">
-                <div className="canvas-empty-state__eyebrow">Wireframe New Page</div>
+                <div className="canvas-empty-state__eyebrow">New Page</div>
                 <strong>{wireframe.purpose || 'Pick a component and click or drag on canvas.'}</strong>
                 <span>单击使用默认尺寸落组件，拖拽按框选尺寸落组件。</span>
               </div>
@@ -631,6 +712,18 @@ export function BoardCanvas() {
               />
             ) : null}
 
+            {selectionDraft && !pendingComponentType ? (
+              <div
+                className="canvas-marquee"
+                style={{
+                  left: selectionDraft.x,
+                  top: selectionDraft.y,
+                  width: selectionDraft.width,
+                  height: selectionDraft.height,
+                }}
+              />
+            ) : null}
+
             {guides.map((guide, index) => (
               <div
                 key={`${guide.orientation}-${guide.position}-${index}`}
@@ -643,15 +736,6 @@ export function BoardCanvas() {
               />
             ))}
 
-            {sizeIndicator ? (
-              <div
-                className="canvas-size-indicator"
-                style={{ left: sizeIndicator.x, top: sizeIndicator.y }}
-              >
-                {sizeIndicator.text}
-              </div>
-            ) : null}
-
             {board.components.map((component) => {
               const firstInteraction = component.interactions[0]
               const badge =
@@ -663,7 +747,7 @@ export function BoardCanvas() {
                 <WireframeBlock
                   key={component.id}
                   component={component}
-                  selected={selectedComponentId === component.id}
+                  selected={selectedComponentIds.includes(component.id)}
                   editing={editingComponentId === component.id}
                   badge={badge}
                   onPointerDown={(event) => startTransform(component.id, event, 'move')}
@@ -689,7 +773,7 @@ export function BoardCanvas() {
               )
             })}
 
-            {selectedComponent ? (
+            {selectedComponent && selectedComponentIds.length === 1 ? (
               <div
                 className="canvas-selection"
                 style={{

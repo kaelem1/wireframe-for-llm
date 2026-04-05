@@ -1,8 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前左栏对齐 Agentation 的 wireframe palette 结构与模式控件
-3. 当前按 ComponentCatalogItem 渲染分组项
+2. 当前左栏统一为组件库与页面意图区，移除模式切换与尺寸备注
+3. 当前按 ComponentCatalogItem 渲染等宽网格项
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -15,11 +15,9 @@ export function ComponentPalette() {
   const pendingComponentType = useAppStore((state) => state.pendingComponentType)
   const wireframe = useAppStore((state) => state.wireframe)
   const setPendingComponentType = useAppStore((state) => state.setPendingComponentType)
-  const setWireframeMode = useAppStore((state) => state.setWireframeMode)
   const startWireframePage = useAppStore((state) => state.startWireframePage)
   const clearActiveBoardComponents = useAppStore((state) => state.clearActiveBoardComponents)
   const setWireframePurpose = useAppStore((state) => state.setWireframePurpose)
-  const setWireframeOpacity = useAppStore((state) => state.setWireframeOpacity)
 
   const activeBoard =
     project && activeBoardId ? project.boards.find((board) => board.id === activeBoardId) ?? null : null
@@ -29,20 +27,13 @@ export function ComponentPalette() {
     <div className="panel panel--palette">
       <div className="panel__header panel__header--palette">
         <div>
-          <div className="panel__eyebrow">Layout mode</div>
-          <h2>Wireframe</h2>
+          <div className="panel__eyebrow">Component library</div>
+          <h2>Components</h2>
         </div>
-        <button
-          type="button"
-          className={wireframe.enabled ? 'palette-toggle is-active' : 'palette-toggle'}
-          onClick={() => setWireframeMode(!wireframe.enabled)}
-        >
-          {wireframe.enabled ? 'On' : 'Off'}
-        </button>
       </div>
 
-      <button type="button" className="palette-mode-button" onClick={startWireframePage}>
-        Wireframe New Page
+      <button type="button" className="ghost-button" onClick={startWireframePage}>
+        New Page
       </button>
 
       <label className="form-field">
@@ -52,18 +43,6 @@ export function ComponentPalette() {
           value={wireframe.purpose}
           placeholder="What is this page for?"
           onChange={(event) => setWireframePurpose(event.target.value)}
-        />
-      </label>
-
-      <label className="form-field">
-        <span>Canvas Opacity</span>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={wireframe.opacity}
-          onChange={(event) => setWireframeOpacity(Number(event.target.value))}
         />
       </label>
 
@@ -88,13 +67,7 @@ export function ComponentPalette() {
                       setPendingComponentType(pendingComponentType === item.type ? null : item.type)
                     }
                   >
-                    <span className="component-palette__icon">{definition.icon}</span>
-                    <span className="component-palette__meta">
-                      <strong>{definition.label}</strong>
-                      <small>
-                        {definition.defaultWidth} × {definition.defaultHeight}
-                      </small>
-                    </span>
+                    <span className="component-palette__label">{definition.label}</span>
                   </button>
                 )
               })}

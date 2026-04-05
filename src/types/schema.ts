@@ -1,7 +1,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前同时承接 source 小写组件目录与现有旧组件类型，避免迁移中断
+2. 当前同时承接 source 小写组件目录与现有旧组件类型，并收敛为单一 wireframe 工作态
 3. 更新后检查所属 `.folder.md`
 */
 
@@ -186,17 +186,8 @@ export interface RestoreTestResult {
   error: string | null
 }
 
-export interface WorkspaceProjectSnapshot {
-  project: ProjectData | null
-  activeBoardId: string | null
-}
-
 export interface WireframeState {
-  enabled: boolean
   purpose: string
-  opacity: number
-  exploreSnapshot: WorkspaceProjectSnapshot | null
-  designSnapshot: WorkspaceProjectSnapshot | null
 }
 
 export interface WorkspaceSnapshot {

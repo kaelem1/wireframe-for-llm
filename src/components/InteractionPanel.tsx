@@ -1,7 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前在右栏同时承接单选交互编辑与图层拖拽排序
+3. 更新后检查所属 `.folder.md`
 */
 
 import { useAppStore } from '../stores/appStore'
@@ -12,6 +13,7 @@ export function InteractionPanel() {
   const project = useAppStore((state) => state.project)
   const activeBoardId = useAppStore((state) => state.activeBoardId)
   const selectedComponentId = useAppStore((state) => state.selectedComponentId)
+  const selectedComponentIds = useAppStore((state) => state.selectedComponentIds)
   const selectComponent = useAppStore((state) => state.selectComponent)
   const updateComponent = useAppStore((state) => state.updateComponent)
   const addInteraction = useAppStore((state) => state.addInteraction)
@@ -24,14 +26,16 @@ export function InteractionPanel() {
   }
 
   const board = getBoardById(project, activeBoardId)
-  const selected = selectedComponentId ? findComponentById(project, selectedComponentId)?.component : null
+  const isMultiSelect = selectedComponentIds.length > 1
+  const selected =
+    !isMultiSelect && selectedComponentId ? findComponentById(project, selectedComponentId)?.component : null
 
   if (!board) {
     return null
   }
 
   const layeredComponents = board.components
-    .map((component, index) => ({ component, index }))
+    .map((component, boardIndex) => ({ component, boardIndex }))
     .reverse()
 
   return (
@@ -158,28 +162,31 @@ export function InteractionPanel() {
             </button>
           </>
         ) : (
-          <div className="panel__empty">选中组件后可编辑名称、交互和图层顺序。</div>
+          <div className="panel__empty">
+            {isMultiSelect ? `已框选 ${selectedComponentIds.length} 个组件，交互编辑仅支持单选。` : '选中组件后可编辑名称、交互和图层顺序。'}
+          </div>
         )}
       </div>
 
       <div className="panel__section panel__section--layers">
         <div className="panel__section-title">图层</div>
         <div className="layer-list">
-          {layeredComponents.map(({ component, index }) => (
+          {layeredComponents.map(({ component, boardIndex }) => (
             <button
               key={component.id}
               type="button"
-              className={component.id === selectedComponentId ? 'layer-item is-active' : 'layer-item'}
+              className={selectedComponentIds.includes(component.id) ? 'layer-item is-active' : 'layer-item'}
               draggable
               onClick={() => selectComponent(component.id)}
               onDragStart={(event) => {
-                event.dataTransfer.setData('application/x-layer-index', String(index))
+                event.dataTransfer.setData('application/x-layer-id', component.id)
               }}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
-                const fromIndex = Number(event.dataTransfer.getData('application/x-layer-index'))
-                if (Number.isFinite(fromIndex)) {
-                  reorderComponents(board.id, fromIndex, index)
+                const fromId = event.dataTransfer.getData('application/x-layer-id')
+                const fromIndex = board.components.findIndex((item) => item.id === fromId)
+                if (fromIndex >= 0) {
+                  reorderComponents(board.id, fromIndex, boardIndex)
                 }
               }}
             >
