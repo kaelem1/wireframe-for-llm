@@ -8,6 +8,7 @@
 6. 当前支持多选复制与粘贴复用
 7. preview 特性已删除，不再维护 preview 状态
 8. 待放置期间禁用其他图层选中入口
+9. 当前支持组件 description 与 type 原位编辑
 9. 更新后检查所属 `.folder.md`
 */
 
@@ -118,7 +119,7 @@ type StoreState = {
   ) => void
   updateComponent: (
     componentId: string,
-    updates: Partial<Pick<ProtoComponent, 'name' | 'x' | 'y' | 'width' | 'height'>>,
+    updates: Partial<Pick<ProtoComponent, 'name' | 'description' | 'type' | 'x' | 'y' | 'width' | 'height'>>,
   ) => void
   updateComponentFrames: (
     updates: Array<Pick<ProtoComponent, 'id' | 'x' | 'y' | 'width' | 'height'>>,
@@ -443,6 +444,13 @@ export const useAppStore = create<StoreState>((set, get) => {
             updates.name || found.component.name,
             found.component.id,
           )
+        }
+        if (typeof updates.description === 'string') {
+          found.component.description = updates.description
+        }
+        if (typeof updates.type === 'string') {
+          found.component.type = updates.type
+          Object.assign(found.component, normalizeComponent(found.component, draft.project.boardSize))
         }
         if (
           typeof updates.x === 'number' ||

@@ -1,17 +1,25 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前在右栏同时承接单选交互编辑、多选批量操作与图层拖拽排序
-3. 图层拖拽提供目标态反馈，文案统一为英文
-4. 更新后检查所属 `.folder.md`
+2. 当前在右栏同时承接导出/复制、单选交互编辑、描述与属性编辑、多选批量操作与图层拖拽排序
+3. 图层拖拽提供目标态反馈，文案跟随 locale 切换
+4. showModal 交互改为直接编辑弹窗描述，不再选择 modal 组件
+5. 当前自动滚动到最近选中的图层，重复点击已选图层保持幂等
+6. 图层列表只保留主名称，不再显示类型副标题
+7. 更新后检查所属 `.folder.md`
 */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { INTERACTION_ACTION_OPTIONS, INTERACTION_TRIGGER_OPTIONS } from '../utils/constants'
-import { findComponentById, getBoardById } from '../utils/project'
+import { COMPONENT_DEFINITIONS, INTERACTION_ACTION_OPTIONS, INTERACTION_TRIGGER_OPTIONS } from '../utils/constants'
+import { getLocalizedComponentLabel, t } from '../utils/i18n'
+import { downloadJson, findComponentById, getBoardById } from '../utils/project'
+import type { ComponentType } from '../types/schema'
+
+const componentTypeOptions = Object.values(COMPONENT_DEFINITIONS)
 
 export function InteractionPanel() {
+  const locale = useAppStore((state) => state.locale)
   const project = useAppStore((state) => state.project)
   const activeBoardId = useAppStore((state) => state.activeBoardId)
   const selectedComponentId = useAppStore((state) => state.selectedComponentId)
@@ -19,6 +27,7 @@ export function InteractionPanel() {
   const selectComponent = useAppStore((state) => state.selectComponent)
   const selectComponents = useAppStore((state) => state.selectComponents)
   const updateComponent = useAppStore((state) => state.updateComponent)
+  const exportProject = useAppStore((state) => state.exportProjectJson)
   const deleteSelectedComponents = useAppStore((state) => state.deleteSelectedComponents)
   const addInteraction = useAppStore((state) => state.addInteraction)
   const setInteraction = useAppStore((state) => state.setInteraction)
@@ -26,6 +35,7 @@ export function InteractionPanel() {
   const reorderComponents = useAppStore((state) => state.reorderComponents)
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const layerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   if (!project || !activeBoardId) {
     return null
@@ -43,154 +53,217 @@ export function InteractionPanel() {
   const layeredComponents = board.components
     .map((component, boardIndex) => ({ component, boardIndex }))
     .reverse()
+  const lastSelectedLayerId = selectedComponentIds.at(-1) ?? selectedComponentId
+
+  useEffect(() => {
+    if (!lastSelectedLayerId) {
+      return
+    }
+
+    layerRefs.current[lastSelectedLayerId]?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+    })
+  }, [lastSelectedLayerId, activeBoardId])
 
   return (
     <div className="panel">
-      <div className="panel__header">
-        <h2>Interactions</h2>
+      <div className="panel__export-actions">
+        <button
+          type="button"
+          className="ghost-button panel__export-button panel__export-button--primary"
+          onClick={() =>
+            downloadJson(
+              `${project.project || t(locale, 'defaultProjectName')}.json`,
+              JSON.parse(exportProject()),
+            )
+          }
+        >
+          {t(locale, 'exportJson')}
+        </button>
+        <button
+          type="button"
+          className="ghost-button panel__copy-button"
+          onClick={() => {
+            void navigator.clipboard.writeText(exportProject())
+          }}
+        >
+          {t(locale, 'copyJson')}
+        </button>
       </div>
 
-      <div className="panel__editor">
-        {selected ? (
-          <>
-            <label className="form-field">
-              <span>Name</span>
-              <input
-                value={selected.name}
-                onChange={(event) => updateComponent(selected.id, { name: event.target.value })}
-              />
-            </label>
+      <div className="panel__section">
+        <div className="panel__header panel__header--section">
+          <h2 className="panel__title">{t(locale, 'interactions')}</h2>
+        </div>
 
-            <div className="interaction-list">
-              {selected.interactions.map((interaction) => (
-                <div key={interaction.id} className="interaction-card">
-                  <label className="form-field">
-                    <span>Trigger</span>
-                    <select
-                      value={interaction.trigger}
-                      onChange={(event) =>
-                        setInteraction(selected.id, interaction.id, {
-                          trigger: event.target.value as typeof interaction.trigger,
-                          action: interaction.action,
-                          target: interaction.target,
-                        })
-                      }
-                    >
-                      {INTERACTION_TRIGGER_OPTIONS.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+        <div className="panel__editor">
+          {selected ? (
+            <>
+              <label className="form-field">
+                <span>{t(locale, 'name')}</span>
+                <input
+                  value={selected.name}
+                  onChange={(event) => updateComponent(selected.id, { name: event.target.value })}
+                />
+              </label>
 
-                  <label className="form-field">
-                    <span>Action</span>
-                    <select
-                      value={interaction.action}
-                      onChange={(event) =>
-                        setInteraction(selected.id, interaction.id, {
-                          trigger: interaction.trigger,
-                          action: event.target.value as typeof interaction.action,
-                          target: interaction.target,
-                        })
-                      }
-                    >
-                      {INTERACTION_ACTION_OPTIONS.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+              <label className="form-field">
+                <span>{t(locale, 'description')}</span>
+                <textarea
+                  rows={3}
+                  value={selected.description ?? ''}
+                  onChange={(event) => updateComponent(selected.id, { description: event.target.value })}
+                />
+              </label>
 
-                  {interaction.action === 'navigate' ? (
+              <div className="interaction-list">
+                {selected.interactions.map((interaction) => (
+                  <div key={interaction.id} className="interaction-card">
                     <label className="form-field">
-                      <span>Target</span>
+                      <span>{t(locale, 'trigger')}</span>
                       <select
-                        value={interaction.target ?? ''}
+                        value={interaction.trigger}
                         onChange={(event) =>
                           setInteraction(selected.id, interaction.id, {
-                            trigger: interaction.trigger,
+                            trigger: event.target.value as typeof interaction.trigger,
                             action: interaction.action,
-                            target: event.target.value,
+                            target: interaction.target,
                           })
                         }
                       >
-                        <option value="">Select Board</option>
-                        {project.boards.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
+                        {INTERACTION_TRIGGER_OPTIONS.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {t(locale, item.value)}
                           </option>
                         ))}
                       </select>
                     </label>
-                  ) : null}
 
-                  {interaction.action === 'showModal' ? (
                     <label className="form-field">
-                      <span>Target</span>
+                      <span>{t(locale, 'action')}</span>
                       <select
-                        value={interaction.target ?? ''}
+                        value={interaction.action}
                         onChange={(event) =>
                           setInteraction(selected.id, interaction.id, {
                             trigger: interaction.trigger,
-                            action: interaction.action,
-                            target: event.target.value,
+                            action: event.target.value as typeof interaction.action,
+                            target: interaction.target,
                           })
                         }
                       >
-                        <option value="">Select Modal</option>
-                        {board.components
-                          .filter((item) => item.type === 'Modal')
-                          .map((item) => (
+                        {INTERACTION_ACTION_OPTIONS.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {t(locale, item.value)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {interaction.action === 'navigate' ? (
+                      <label className="form-field">
+                        <span>{t(locale, 'target')}</span>
+                        <select
+                          value={interaction.target ?? ''}
+                          onChange={(event) =>
+                            setInteraction(selected.id, interaction.id, {
+                              trigger: interaction.trigger,
+                              action: interaction.action,
+                              target: event.target.value,
+                            })
+                          }
+                        >
+                          <option value="">{t(locale, 'selectBoard')}</option>
+                          {project.boards.map((item) => (
                             <option key={item.id} value={item.id}>
                               {item.name}
                             </option>
                           ))}
-                      </select>
-                    </label>
-                  ) : null}
+                        </select>
+                      </label>
+                    ) : null}
 
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => removeInteraction(selected.id, interaction.id)}
-                  >
-                    Delete Interaction
-                  </button>
-                </div>
-              ))}
-            </div>
+                    {interaction.action === 'showModal' ? (
+                      <label className="form-field">
+                        <span>{t(locale, 'modalContent')}</span>
+                        <textarea
+                          rows={3}
+                          value={interaction.target ?? ''}
+                          onChange={(event) =>
+                            setInteraction(selected.id, interaction.id, {
+                              trigger: interaction.trigger,
+                              action: interaction.action,
+                              target: event.target.value,
+                            })
+                          }
+                          placeholder={t(locale, 'modalContentPlaceholder')}
+                        />
+                      </label>
+                    ) : null}
 
-            <button type="button" className="ghost-button" onClick={() => addInteraction(selected.id)}>
-              + Add Interaction
-            </button>
-          </>
-        ) : isMultiSelect ? (
-          <div className="panel__batch-state">
-            <strong>{selectedComponentIds.length} selected</strong>
-            <span>Batch actions are available for the current selection.</span>
-            <div className="panel__batch-actions">
-              <button type="button" className="ghost-button" onClick={deleteSelectedComponents}>
-                Delete Selected
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => removeInteraction(selected.id, interaction.id)}
+                    >
+                      {t(locale, 'deleteInteraction')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button type="button" className="ghost-button" onClick={() => addInteraction(selected.id)}>
+                {t(locale, 'addInteraction')}
               </button>
-              <button type="button" className="ghost-button" onClick={() => selectComponents([])}>
-                Clear Selection
-              </button>
+
+              <label className="form-field">
+                <span>{t(locale, 'attributes')}</span>
+                <select
+                  value={selected.type}
+                  onChange={(event) =>
+                    updateComponent(selected.id, {
+                      type: event.target.value as ComponentType,
+                    })
+                  }
+                >
+                  {componentTypeOptions.map((item) => (
+                    <option key={item.type} value={item.type}>
+                      {getLocalizedComponentLabel(locale, item.type, item.label)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          ) : isMultiSelect ? (
+            <div className="panel__batch-state">
+              <strong>{t(locale, 'selectedCount', { count: selectedComponentIds.length })}</strong>
+              <span>{t(locale, 'batchActionsHint')}</span>
+              <div className="panel__batch-actions">
+                <button type="button" className="ghost-button" onClick={deleteSelectedComponents}>
+                  {t(locale, 'deleteSelected')}
+                </button>
+                <button type="button" className="ghost-button" onClick={() => selectComponents([])}>
+                  {t(locale, 'clearSelection')}
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="panel__empty">Select a component to edit its name, interactions, and layer order.</div>
-        )}
+          ) : (
+            <div className="panel__empty">{t(locale, 'emptyInspector')}</div>
+          )}
+        </div>
       </div>
 
       <div className="panel__section panel__section--layers">
-        <div className="panel__section-title">Layers</div>
+        <div className="panel__header panel__header--section">
+          <h2 className="panel__title">{t(locale, 'layers')}</h2>
+        </div>
         <div className="layer-list">
           {layeredComponents.map(({ component, boardIndex }) => (
             <button
               key={component.id}
+              ref={(node) => {
+                layerRefs.current[component.id] = node
+              }}
               type="button"
               className={[
                 'layer-item',
@@ -201,7 +274,12 @@ export function InteractionPanel() {
                 .filter(Boolean)
                 .join(' ')}
               draggable
-              onClick={() => selectComponent(component.id)}
+              onClick={() => {
+                if (selectedComponentIds.length === 1 && selectedComponentIds[0] === component.id) {
+                  return
+                }
+                selectComponent(component.id)
+              }}
               onDragStart={(event) => {
                 setDraggingId(component.id)
                 event.dataTransfer.setData('application/x-layer-id', component.id)
@@ -230,7 +308,6 @@ export function InteractionPanel() {
               }}
             >
               <span>{component.name}</span>
-              <small>{component.type}</small>
             </button>
           ))}
         </div>

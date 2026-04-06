@@ -134,6 +134,8 @@ body {
 }
 
 .workspace-toast {
+  appearance: none;
+  cursor: pointer;
   position: absolute;
   left: 50%;
   bottom: 84px;
@@ -149,7 +151,7 @@ body {
   line-height: 1.35;
   text-align: center;
   box-shadow: 0 16px 30px rgba(15, 23, 42, 0.18);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .workspace__sidebar {

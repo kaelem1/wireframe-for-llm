@@ -1,9 +1,12 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前包含项目导出扩展、fit 缩放与放置/命名辅助
-3. 组件归一化仅做边界与最小尺寸约束，不再锁死特定组件的位置或宽度
-4. 更新后检查所属 `.folder.md`
+2. 当前包含项目导出扩展、双语命名辅助、fit 缩放与放置/命名辅助
+3. 组件归一化仅做最小尺寸约束，不再锁死边界位置或尺寸
+4. 组件复制支持可控偏移，供粘贴与 Option 拖拽复用
+5. 导出 JSON 会为越界组件补 clipped，并写入固定 _instructions；组件描述会映射为 info
+6. 组件命名支持最小防重逻辑
+7. 更新后检查所属 `.folder.md`
 */
 
 import {
@@ -15,6 +18,15 @@ import {
   GRID_SIZE,
   STORAGE_KEY,
 } from './constants'
+import {
+  DEFAULT_LOCALE,
+  getCopyName,
+  getDefaultProjectName,
+  getIndexedBoardName,
+  getInitialBoardName,
+  getLocalizedComponentLabel,
+  t,
+} from './i18n'
 import type {
   AISettings,
   Board,
@@ -24,13 +36,13 @@ import type {
   ExportBoard,
   ExportComponentLayout,
   ExportProjectData,
+  Locale,
   PersistedState,
   ProjectData,
   ProtoComponent,
 } from '../types/schema'
 
-const EXPORT_INSTRUCTION =
-  '请先补充应用类型，再还原这种布局；如项目内无前端内容，请输出 html，并基于这个布局做一个应用原型。'
+const EXPORT_INSTRUCTION = t(DEFAULT_LOCALE, 'exportInstruction')
 
 export function createId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -82,12 +94,13 @@ export function createProject(
   projectName: string,
   device: DevicePreset,
   customBoardSize?: BoardSize,
+  locale: Locale = DEFAULT_LOCALE,
 ): ProjectData {
   const boardSize = getDeviceSize(device, customBoardSize)
-  const board = createBoard('首页')
+  const board = createBoard(getInitialBoardName(locale))
 
   return {
-    project: projectName,
+    project: projectName || getDefaultProjectName(locale),
     device,
     boardSize,
     boards: [board],
@@ -97,14 +110,24 @@ export function createProject(
 export function exportProjectJson(project: ProjectData) {
   const exported: ExportProjectData = {
     ...project,
+    _instructions: {
+      clipped:
+        '如果一个组件的 clipped 为 true，说明它被画板边界截断了，其真实高度未知。还原时请参考同类型、同名称的其他组件高度，保持一致。',
+    },
     instruction: EXPORT_INSTRUCTION,
     boards: project.boards.map<ExportBoard>((board) => ({
       ...board,
       layout: { axis: 'vertical' },
-      components: board.components.map((component) => ({
-        ...component,
-        layout: getExportComponentLayout(component),
-      })),
+      components: board.components.map((component) => {
+        const { description, ...rest } = component
+
+        return {
+          ...rest,
+          ...(description ? { info: description } : {}),
+          ...(isComponentClipped(component, project.boardSize) ? { clipped: true as const } : {}),
+          layout: getExportComponentLayout(component),
+        }
+      }),
     })),
   }
 
@@ -147,6 +170,7 @@ export function createComponent(
   board: Board,
   boardSize: BoardSize,
   dropPosition?: { x: number; y: number },
+  locale: Locale = DEFAULT_LOCALE,
 ): ProtoComponent {
   const meta = COMPONENT_META_MAP[type]
   const width = meta.fullWidth ? boardSize.width : Math.min(meta.defaultWidth, boardSize.width)
@@ -169,7 +193,7 @@ export function createComponent(
   return {
     id: createId('comp'),
     type,
-    name: meta.label,
+    name: getNextComponentName(board, getLocalizedComponentLabel(locale, type, meta.label)),
     x,
     y,
     width,
@@ -178,15 +202,13 @@ export function createComponent(
   }
 }
 
-export function normalizeComponent(component: ProtoComponent, boardSize: BoardSize): ProtoComponent {
+export function normalizeComponent(component: ProtoComponent, _boardSize: BoardSize): ProtoComponent {
   const meta = COMPONENT_META_MAP[component.type]
-  const width = clamp(component.width, meta.minWidth, boardSize.width)
-  const height = clamp(component.height, meta.minHeight, boardSize.height)
-  const maxX = Math.max(0, boardSize.width - width)
-  const maxY = Math.max(0, boardSize.height - height)
+  const width = Math.max(meta.minWidth, snap(component.width))
+  const height = Math.max(meta.minHeight, snap(component.height))
 
-  let x = clamp(snap(component.x), 0, maxX)
-  let y = clamp(snap(component.y), 0, maxY)
+  const x = snap(component.x)
+  const y = snap(component.y)
 
   return {
     ...component,
@@ -197,14 +219,28 @@ export function normalizeComponent(component: ProtoComponent, boardSize: BoardSi
   }
 }
 
-export function duplicateComponent(component: ProtoComponent, boardSize: BoardSize): ProtoComponent {
+function isComponentClipped(component: ProtoComponent, boardSize: BoardSize) {
+  return (
+    component.x < 0 ||
+    component.y < 0 ||
+    component.x + component.width > boardSize.width ||
+    component.y + component.height > boardSize.height
+  )
+}
+
+export function duplicateComponent(
+  component: ProtoComponent,
+  boardSize: BoardSize,
+  locale: Locale = DEFAULT_LOCALE,
+  offset: { x: number; y: number } = { x: GRID_SIZE * 2, y: GRID_SIZE * 2 },
+): ProtoComponent {
   return normalizeComponent(
     {
       ...component,
       id: createId('comp'),
-      name: `${component.name} 副本`,
-      x: component.x + GRID_SIZE * 2,
-      y: component.y + GRID_SIZE * 2,
+      name: getCopyName(locale, component.name),
+      x: component.x + offset.x,
+      y: component.y + offset.y,
       interactions: component.interactions.map((item) => ({
         ...item,
         id: createId('interaction'),
@@ -214,7 +250,11 @@ export function duplicateComponent(component: ProtoComponent, boardSize: BoardSi
   )
 }
 
-export function duplicateBoard(project: ProjectData, boardId: string): Board | null {
+export function duplicateBoard(
+  project: ProjectData,
+  boardId: string,
+  locale: Locale = DEFAULT_LOCALE,
+): Board | null {
   const source = getBoardById(project, boardId)
 
   if (!source) {
@@ -223,7 +263,7 @@ export function duplicateBoard(project: ProjectData, boardId: string): Board | n
 
   return {
     id: createId('board'),
-    name: getNextBoardCopyName(project, source.name),
+    name: getNextBoardCopyName(project, source.name, locale),
     components: source.components.map((component) => ({
       ...component,
       id: createId('comp'),
@@ -255,18 +295,18 @@ export function findComponentById(project: ProjectData, componentId: string) {
   return null
 }
 
-export function getNextBoardName(project: ProjectData) {
+export function getNextBoardName(project: ProjectData, locale: Locale = DEFAULT_LOCALE) {
   let index = 1
 
-  while (project.boards.some((board) => board.name === `画板${index}`)) {
+  while (project.boards.some((board) => board.name === getIndexedBoardName(locale, index))) {
     index += 1
   }
 
-  return `画板${index}`
+  return getIndexedBoardName(locale, index)
 }
 
-function getNextBoardCopyName(project: ProjectData, name: string) {
-  const baseName = `${name} 副本`
+function getNextBoardCopyName(project: ProjectData, name: string, locale: Locale) {
+  const baseName = getCopyName(locale, name)
 
   if (!project.boards.some((board) => board.name === baseName)) {
     return baseName
@@ -279,6 +319,22 @@ function getNextBoardCopyName(project: ProjectData, name: string) {
   }
 
   return `${baseName} ${index}`
+}
+
+export function getNextComponentName(board: Board, name: string, excludeId?: string) {
+  const baseName = name.trim() || 'Component'
+
+  if (!board.components.some((component) => component.id !== excludeId && component.name === baseName)) {
+    return baseName
+  }
+
+  let index = 1
+
+  while (board.components.some((component) => component.id !== excludeId && component.name === `${baseName}${index}`)) {
+    index += 1
+  }
+
+  return `${baseName}${index}`
 }
 
 export function getPlacedComponentFrame(
@@ -358,7 +414,7 @@ export function parseProjectJson(text: string): ProjectData {
   const raw = JSON.parse(text) as Partial<ProjectData>
 
   if (!raw.project || !raw.device || !raw.boardSize || !Array.isArray(raw.boards)) {
-    throw new Error('JSON 结构不符合项目格式')
+    throw new Error(t(DEFAULT_LOCALE, 'invalidProjectJson'))
   }
 
   const boardSize: BoardSize = {
@@ -372,26 +428,31 @@ export function parseProjectJson(text: string): ProjectData {
     boardSize,
     boards: raw.boards.map((board, boardIndex) => ({
       id: board.id ?? createId(`board-${boardIndex}`),
-      name: board.name ?? `画板${boardIndex + 1}`,
+      name: board.name ?? getIndexedBoardName(DEFAULT_LOCALE, boardIndex + 1),
       components: (board.components ?? []).map((component) =>
-        normalizeComponent(
-          {
-            id: component.id ?? createId('comp'),
-            type: component.type,
-            name: component.name ?? COMPONENT_META_MAP[component.type].label,
-            x: component.x ?? 0,
-            y: component.y ?? 0,
-            width: component.width ?? COMPONENT_META_MAP[component.type].defaultWidth,
-            height: component.height ?? COMPONENT_META_MAP[component.type].defaultHeight,
-            interactions: (component.interactions ?? []).map((interaction) => ({
-              id: interaction.id ?? createId('interaction'),
-              trigger: interaction.trigger,
-              action: interaction.action,
-              target: interaction.target,
-            })),
-          },
-          boardSize,
-        ),
+        (() => {
+          const source = component as ProtoComponent & { info?: string }
+
+          return normalizeComponent(
+            {
+              id: source.id ?? createId('comp'),
+              type: component.type,
+              name: source.name ?? COMPONENT_META_MAP[component.type].label,
+              description: source.description ?? source.info,
+              x: source.x ?? 0,
+              y: source.y ?? 0,
+              width: source.width ?? COMPONENT_META_MAP[component.type].defaultWidth,
+              height: source.height ?? COMPONENT_META_MAP[component.type].defaultHeight,
+              interactions: (source.interactions ?? []).map((interaction) => ({
+                id: interaction.id ?? createId('interaction'),
+                trigger: interaction.trigger,
+                action: interaction.action,
+                target: interaction.target,
+              })),
+            },
+            boardSize,
+          )
+        })(),
       ),
     })),
   }
@@ -415,6 +476,7 @@ export function loadPersistedState(): PersistedState | null {
 
     return {
       ...parsed,
+      locale: parsed.locale === 'zh' ? 'zh' : DEFAULT_LOCALE,
       project: parseProjectJson(JSON.stringify(parsed.project)),
     }
   } catch {
