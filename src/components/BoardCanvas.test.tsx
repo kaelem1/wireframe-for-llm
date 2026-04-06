@@ -264,7 +264,7 @@ describe('BoardCanvas', () => {
     expect(exportButton.className).toContain('panel__export-button--primary')
     expect(exportRule).toContain('flex: 2;')
     expect(copyRule).toContain('flex: 1;')
-    expect(exportPrimaryRule).toContain('background: #111827;')
+    expect(exportPrimaryRule).toContain('background: #5a3e31;')
     expect(exportPrimaryRule).toContain('color: #fff;')
     expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
     expect(container.querySelector('.preview-overlay')).toBeNull()
@@ -278,6 +278,51 @@ describe('BoardCanvas', () => {
     expect(createObjectURLMock).toHaveBeenCalled()
     expect(anchorClickMock).toHaveBeenCalled()
     expect(revokeObjectURLMock).toHaveBeenCalled()
+  })
+
+  it('keeps the layers section reachable when the interaction editor is long and the board has many layers', () => {
+    const project = createProject('Test Project', 'Desktop')
+    const board = project.boards[0]
+    const selected = createComponent('Button', board, project.boardSize, { x: 48, y: 48 })
+    board.components.push(selected)
+
+    for (let index = 0; index < 11; index += 1) {
+      board.components.push(
+        createComponent(index % 2 === 0 ? 'Card' : 'Text', board, project.boardSize, {
+          x: 96 + index * 8,
+          y: 120 + index * 8,
+        }),
+      )
+    }
+
+    for (let index = 0; index < 12; index += 1) {
+      selected.interactions.push({
+        id: createId('interaction'),
+        trigger: 'tap',
+        action: 'navigate',
+        target: board.id,
+      })
+    }
+
+    useAppStore.getState().replaceProject(project)
+    useAppStore.getState().selectComponent(selected.id)
+
+    const { container } = render(<App />)
+    const panelRule = appStyles.match(/\.panel\s*\{[^}]*\}/)?.[0] ?? ''
+    const editorRule = appStyles.match(/\.panel__editor\s*\{[^}]*\}/)?.[0] ?? ''
+    const inspectorRule =
+      appStyles.match(/\.panel__section:not\(\.panel__section--layers\)\s*\{[^}]*\}/)?.[0] ?? ''
+    const layersRule = appStyles.match(/\.panel__section--layers\s*\{[^}]*\}/)?.[0] ?? ''
+    const layerListRule = appStyles.match(/\.layer-list\s*\{[^}]*\}/)?.[0] ?? ''
+
+    expect(container.querySelectorAll('.interaction-card')).toHaveLength(12)
+    expect(container.querySelectorAll('.layer-item')).toHaveLength(12)
+    expect(panelRule).toContain('overflow: hidden;')
+    expect(editorRule).toContain('overflow: auto;')
+    expect(inspectorRule).toContain('flex: 1;')
+    expect(inspectorRule).toContain('grid-template-rows: auto minmax(0, 1fr);')
+    expect(layersRule).toContain('overflow: hidden;')
+    expect(layerListRule).toContain('overflow: auto;')
   })
 
   it('places a component at default size when clicking the canvas', () => {
