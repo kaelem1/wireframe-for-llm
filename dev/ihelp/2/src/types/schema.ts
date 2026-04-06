@@ -1,12 +1,14 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前同时承接 source 小写组件目录与现有旧组件类型，并收敛为单一 wireframe 工作态
-3. 更新后检查所属 `.folder.md`
+2. 当前同时承接 source 小写组件目录、浏览器派生 locale 与现有旧组件类型，并收敛为单一 wireframe 工作态
+3. 当前补入 genericBlock 组件类型，并为导出结构补充 clipped/_instructions；组件内部可存 description，导出时映射为 info
+4. 更新后检查所属 `.folder.md`
 */
 
 export type DevicePreset = 'iPhone' | 'Android' | 'iPad' | 'Desktop' | 'Custom'
 export type DevicePresetKey = DevicePreset
+export type Locale = 'en' | 'zh'
 
 export type ComponentType =
   | 'navigation'
@@ -63,6 +65,7 @@ export type ComponentType =
   | 'logo'
   | 'faq'
   | 'gallery'
+  | 'genericBlock'
   | 'checkbox'
   | 'radio'
   | 'slider'
@@ -125,6 +128,7 @@ export interface ProtoComponent {
   id: string
   type: ComponentType
   name: string
+  description?: string
   x: number
   y: number
   width: number
@@ -154,7 +158,9 @@ export interface ExportComponentLayout {
   width: 'full' | 'fixed'
 }
 
-export interface ExportComponent extends ProtoComponent {
+export interface ExportComponent extends Omit<ProtoComponent, 'description'> {
+  clipped?: true
+  info?: string
   layout: ExportComponentLayout
 }
 
@@ -164,6 +170,9 @@ export interface ExportBoard extends Omit<Board, 'components'> {
 }
 
 export interface ExportProjectData extends Omit<ProjectData, 'boards'> {
+  _instructions: {
+    clipped: string
+  }
   instruction: string
   boards: ExportBoard[]
 }
@@ -195,6 +204,7 @@ export interface WorkspaceSnapshot {
   settings: AISettings
   activeBoardId: string | null
   wireframe: WireframeState
+  locale: Locale
 }
 
 export interface PersistedState {
@@ -204,6 +214,7 @@ export interface PersistedState {
   settings: AISettings
   setupCompleted: boolean
   wireframe: WireframeState
+  locale?: Locale
 }
 
 export type ComponentData = ProtoComponent
@@ -214,4 +225,5 @@ export interface AppState {
   settings: AISettings
   activeBoardId: string | null
   wireframe: WireframeState
+  locale: Locale
 }

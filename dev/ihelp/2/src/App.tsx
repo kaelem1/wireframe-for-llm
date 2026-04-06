@@ -5,7 +5,7 @@
 3. Escape 只清当前已选组件，不清待放置组件
 4. 当前复用组件复制链路支持快捷键复制粘贴
 5. 顶部 toolbar 与 preview 入口已删除，导出能力移到右栏顶部
-6. 待放置时在 workspace 底部居中显示退出放置 toast
+6. 待放置时在 workspace 底部居中显示可点击的退出放置 toast
 7. 更新后检查所属 `.folder.md`
 */
 
@@ -51,6 +51,7 @@ export default function App() {
   const undo = useAppStore((state) => state.undo)
   const redo = useAppStore((state) => state.redo)
   const selectComponent = useAppStore((state) => state.selectComponent)
+  const setPendingComponentType = useAppStore((state) => state.setPendingComponentType)
 
   useEffect(() => {
     if (!project) {
@@ -141,6 +142,7 @@ export default function App() {
     selectedComponentId,
     selectedComponentIds.length,
     selectComponent,
+    setPendingComponentType,
     undo,
   ])
 
@@ -171,9 +173,13 @@ export default function App() {
       </div>
 
       {pendingComponentType ? (
-        <div className="workspace-toast" role="status" aria-live="polite">
+        <button
+          type="button"
+          className="workspace-toast"
+          onClick={() => setPendingComponentType(null)}
+        >
           {t(locale, 'placementToast')}
-        </div>
+        </button>
       ) : null}
 
       <BoardStrip />

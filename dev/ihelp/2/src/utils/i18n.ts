@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前集中管理应用双语词典、浏览器语言检测与少量文案派生
-3. 当前补入 genericBlock、弹窗描述、原位预览与 placement toast 文案
+3. 当前补入 genericBlock、组件描述、属性切换、弹窗描述、原位预览与 placement toast 文案
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -36,6 +36,8 @@ const messages = {
     newPage: 'New Page',
     pickComponentHint: 'Select a component, then drag/click to place it.',
     name: 'Name',
+    description: 'Description',
+    attributes: 'Attributes',
     trigger: 'Trigger',
     action: 'Action',
     target: 'Target',
@@ -55,12 +57,12 @@ const messages = {
     batchActionsHint: 'Batch actions are available for the current selection.',
     deleteSelected: 'Delete Selected',
     clearSelection: 'Clear Selection',
-    emptyInspector: 'Select a component to edit its name, interactions, and layer order.',
+    emptyInspector: 'Select a component to edit its name, description, attributes, interactions, and layer order.',
     clickToPlace: 'Select a component, then drag/click to place it.',
-    placementToast: 'Click the active component in the left palette again to exit placement.',
+    placementToast: '退出放置',
     duplicate: 'Duplicate',
     delete: 'Delete',
-    exitPlacement: 'Exit Placement',
+    exitPlacement: '退出放置',
     resizeComponent: 'Resize component {handle}',
     moreForBoard: 'More actions for {name}',
     more: 'More',
@@ -114,6 +116,8 @@ const messages = {
     newPage: '新画板',
     pickComponentHint: '选中组件，然后拖拽/点击放置组件。',
     name: '名称',
+    description: '描述',
+    attributes: '属性',
     trigger: '触发方式',
     action: '动作',
     target: '目标',
@@ -133,9 +137,9 @@ const messages = {
     batchActionsHint: '当前选区可执行批量操作。',
     deleteSelected: '删除选中项',
     clearSelection: '清除选中',
-    emptyInspector: '选中组件后可编辑名称、交互和图层顺序。',
+    emptyInspector: '选中组件后可编辑名称、描述、属性、交互和图层顺序。',
     clickToPlace: '选中组件，然后拖拽/点击放置组件。',
-    placementToast: '再次点击左侧组件栏中的当前组件即可退出放置。',
+    placementToast: '退出放置',
     duplicate: '复制',
     delete: '删除',
     exitPlacement: '退出放置',
