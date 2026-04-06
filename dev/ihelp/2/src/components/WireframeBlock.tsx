@@ -34,7 +34,7 @@ function bar(width: string | number, height = 3, strong = false): ReactElement {
         width: typeof width === 'number' ? `${width}px` : width,
         height,
         borderRadius: 999,
-        background: strong ? '#374151' : '#9ca3af',
+        background: strong ? '#5b4437' : '#b99678',
         flexShrink: 0,
       }}
     />
@@ -48,7 +48,7 @@ function block(width: string | number, height: string | number, extra?: CSSPrope
         width: typeof width === 'number' ? `${width}px` : width,
         height: typeof height === 'number' ? `${height}px` : height,
         borderRadius: 6,
-        border: '1px dashed #9ca3af',
+        border: '1px dashed #b99678',
         background: 'rgba(255,255,255,0.6)',
         flexShrink: 0,
         ...extra,
@@ -64,8 +64,8 @@ function circle(size: number, filled = false): ReactElement {
         width: size,
         height: size,
         borderRadius: '50%',
-        border: '1px dashed #9ca3af',
-        background: filled ? '#374151' : 'rgba(255,255,255,0.6)',
+        border: '1px dashed #b99678',
+        background: filled ? '#5b4437' : 'rgba(255,255,255,0.6)',
         flexShrink: 0,
       }}
     />
@@ -130,7 +130,7 @@ function renderTextualSkeleton(type: ComponentType, height: number, text?: strin
   if (type === 'button') {
     return (
       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {block('70%', Math.min(36, height * 0.75), { background: '#d1d5db' })}
+        {block('70%', Math.min(36, height * 0.75), { background: '#e6d1c0' })}
       </div>
     )
   }
@@ -168,7 +168,7 @@ function renderTextualSkeleton(type: ComponentType, height: number, text?: strin
 
   if (type === 'text' && text) {
     return (
-      <div style={{ fontSize: Math.min(14, height * 0.22), lineHeight: 1.45, color: '#374151', wordBreak: 'break-word' }}>
+      <div style={{ fontSize: Math.min(14, height * 0.22), lineHeight: 1.45, color: '#5b4437', wordBreak: 'break-word' }}>
         {text}
       </div>
     )
@@ -206,7 +206,7 @@ function renderCollectionSkeleton(type: ComponentType, width: number, height: nu
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 4, height: '100%' }}>
         {Array.from({ length: columns * rows }, (_, index) => (
           <div key={index} style={{ minHeight: Math.max(16, height / (rows + 1)) }}>
-            {block('100%', '100%', { background: index < columns ? '#e5e7eb' : 'rgba(255,255,255,0.4)' })}
+            {block('100%', '100%', { background: index < columns ? '#ead8c7' : 'rgba(255,255,255,0.4)' })}
           </div>
         ))}
       </div>
@@ -263,7 +263,7 @@ function renderLayoutSkeleton(type: ComponentType, width: number, height: number
         {bar(type === 'section' ? '34%' : '52%', 4, true)}
         {bar(type === 'section' ? '72%' : '64%', 2)}
         {bar(type === 'section' ? '58%' : '46%', 2)}
-        <div style={{ marginTop: 6 }}>{block(Math.min(120, width * 0.25), Math.min(32, height * 0.12), { background: '#d1d5db' })}</div>
+        <div style={{ marginTop: 6 }}>{block(Math.min(120, width * 0.25), Math.min(32, height * 0.12), { background: '#e6d1c0' })}</div>
       </div>
     )
   }
@@ -275,7 +275,7 @@ function renderLayoutSkeleton(type: ComponentType, width: number, height: number
   if (type === 'modal' || type === 'popover') {
     return (
       <div style={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 8, borderBottom: '1px solid #d1d5db' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 8, borderBottom: '1px solid #e6d1c0' }}>
           {bar('34%', 4, true)}
           {block(14, 14)}
         </div>
@@ -286,7 +286,7 @@ function renderLayoutSkeleton(type: ComponentType, width: number, height: number
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8 }}>
           {block(70, 26)}
-          {block(70, 26, { background: '#d1d5db' })}
+          {block(70, 26, { background: '#e6d1c0' })}
         </div>
       </div>
     )
@@ -294,7 +294,7 @@ function renderLayoutSkeleton(type: ComponentType, width: number, height: number
 
   return (
     <div style={{ height: '100%', display: 'flex', alignItems: 'center' }}>
-      <div style={{ width: '100%', height: 1, background: '#9ca3af' }} />
+      <div style={{ width: '100%', height: 1, background: '#b99678' }} />
     </div>
   )
 }
@@ -318,7 +318,7 @@ function renderControlSkeleton(type: ComponentType, width: number, height: numbe
             {block('100%', 28)}
           </div>
         ))}
-        {block(Math.min(120, width * 0.35), 30, { background: '#d1d5db', alignSelf: 'flex-end' })}
+        {block(Math.min(120, width * 0.35), 30, { background: '#e6d1c0', alignSelf: 'flex-end' })}
       </div>
     )
   }
@@ -331,10 +331,10 @@ function renderControlSkeleton(type: ComponentType, width: number, height: numbe
             {type === 'stepper' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 {circle(12, index === 0)}
-                {index < 4 ? <div style={{ flex: 1, height: 1, background: '#9ca3af' }} /> : null}
+                {index < 4 ? <div style={{ flex: 1, height: 1, background: '#b99678' }} /> : null}
               </div>
             ) : (
-              block('100%', Math.min(28, height * 0.7), { background: index === 0 ? '#d1d5db' : 'rgba(255,255,255,0.6)' })
+              block('100%', Math.min(28, height * 0.7), { background: index === 0 ? '#e6d1c0' : 'rgba(255,255,255,0.6)' })
             )}
           </div>
         ))}
@@ -358,7 +358,7 @@ function renderControlSkeleton(type: ComponentType, width: number, height: numbe
 
   if (type === 'fileUpload') {
     return (
-      <div style={{ height: '100%', border: '2px dashed #9ca3af', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+      <div style={{ height: '100%', border: '2px dashed #b99678', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
         {block(24, 24)}
         {bar('34%', 2)}
         {bar('20%', 2)}
@@ -372,11 +372,11 @@ function renderControlSkeleton(type: ComponentType, width: number, height: numbe
 function renderMediaSkeleton(type: ComponentType, width: number, height: number) {
   if (type === 'image' || type === 'gallery' || type === 'video' || type === 'map') {
     return (
-      <div style={{ position: 'relative', height: '100%', borderRadius: 6, border: '1px dashed #9ca3af', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', height: '100%', borderRadius: 6, border: '1px dashed #b99678', overflow: 'hidden' }}>
         <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" fill="none">
-          <line x1="0" y1="0" x2={width} y2={height} stroke="#9ca3af" strokeWidth="1" />
-          <line x1={width} y1="0" x2="0" y2={height} stroke="#9ca3af" strokeWidth="1" />
-          {type === 'video' ? <circle cx={width / 2} cy={height / 2} r={Math.min(width, height) * 0.12} fill="rgba(255,255,255,0.8)" stroke="#6b7280" /> : null}
+          <line x1="0" y1="0" x2={width} y2={height} stroke="#b99678" strokeWidth="1" />
+          <line x1={width} y1="0" x2="0" y2={height} stroke="#b99678" strokeWidth="1" />
+          {type === 'video' ? <circle cx={width / 2} cy={height / 2} r={Math.min(width, height) * 0.12} fill="rgba(255,255,255,0.8)" stroke="#8b6e5a" /> : null}
         </svg>
       </div>
     )
@@ -384,7 +384,7 @@ function renderMediaSkeleton(type: ComponentType, width: number, height: number)
 
   if (type === 'chart') {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'flex-end', gap: 6, paddingBottom: 4, borderBottom: '1px solid #9ca3af' }}>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'flex-end', gap: 6, paddingBottom: 4, borderBottom: '1px solid #b99678' }}>
         {Array.from({ length: Math.max(3, Math.min(7, Math.floor(width / 50))) }, (_, index) => (
           <div key={index}>{block(Math.max(12, width / 18), `${35 + ((index * 17) % 40)}%`)}</div>
         ))}
@@ -394,7 +394,7 @@ function renderMediaSkeleton(type: ComponentType, width: number, height: number)
 
   if (type === 'codeBlock') {
     return (
-      <div style={{ height: '100%', borderRadius: 6, border: '1px solid #9ca3af', background: 'rgba(255,255,255,0.75)', padding: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div style={{ height: '100%', borderRadius: 6, border: '1px solid #b99678', background: 'rgba(255,255,255,0.75)', padding: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
         <div style={{ display: 'flex', gap: 4 }}>{circle(6)}{circle(6)}{circle(6)}</div>
         {Array.from({ length: Math.max(3, Math.min(7, Math.floor(height / 22))) }, (_, index) => (
           <div key={index}>{bar(`${35 + ((index * 19) % 45)}%`, 2, index === 0)}</div>
@@ -416,7 +416,7 @@ function renderBlockSkeleton(type: ComponentType, width: number, height: number)
           {bar('36%', 2)}
           {bar('68%', 2)}
           <div style={{ flex: 1 }} />
-          {block(Math.min(90, width * 0.35), 26, { background: '#d1d5db' })}
+          {block(Math.min(90, width * 0.35), 26, { background: '#e6d1c0' })}
         </div>
       </div>
     )
