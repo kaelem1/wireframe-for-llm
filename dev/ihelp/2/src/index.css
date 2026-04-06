@@ -206,19 +206,6 @@ body {
   margin: 0;
 }
 
-.panel__eyebrow {
-  margin-bottom: 4px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6b7280;
-}
-
-.panel__header--palette .panel__eyebrow {
-  width: 100%;
-  margin-bottom: 0;
-}
-
 .panel__header--section {
   padding-bottom: 2px;
 }
