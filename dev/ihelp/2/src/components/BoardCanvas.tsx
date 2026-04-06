@@ -2,15 +2,17 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前统一画布交互，补齐点击放置、框选多选、八向缩放与空白提示层
-3. 空白提示层不再消费 purpose，组件按钮进入连续放置
-4. 更新后检查所属 `.folder.md`
+3. 空白提示层收敛为单句提示，组件按钮进入连续放置
+4. 当前支持 Option/Alt 拖拽复制所选组件与越界移动缩放
+5. 更新后检查所属 `.folder.md`
+6. 待放置期间屏蔽其他图层的选中与拖拽入口
 */
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useAppStore } from '../stores/appStore'
+import { t } from '../utils/i18n'
 import { PLACEMENT_DRAG_THRESHOLD } from '../utils/constants'
 import {
-  clamp,
   findComponentById,
   getBoardById,
   getBoardFitScale,
@@ -140,8 +142,8 @@ function getMoveFrame(
   const { xTargets, yTargets } = getGuideTargets(boardSize, others)
   const guides: Guide[] = []
 
-  const left = clamp(snap(frame.x), 0, boardSize.width - frame.width)
-  const top = clamp(snap(frame.y), 0, boardSize.height - frame.height)
+  const left = snap(frame.x)
+  const top = snap(frame.y)
   let nextX = left
   let nextY = top
 
@@ -168,11 +170,11 @@ function getMoveFrame(
     const rightDelta = Math.abs(left + frame.width - xSnap.snapped)
 
     if (centerDelta <= leftDelta && centerDelta <= rightDelta) {
-      nextX = clamp(snap(xSnap.snapped - frame.width / 2), 0, boardSize.width - frame.width)
+      nextX = snap(xSnap.snapped - frame.width / 2)
     } else if (rightDelta < leftDelta) {
-      nextX = clamp(snap(xSnap.snapped - frame.width), 0, boardSize.width - frame.width)
+      nextX = snap(xSnap.snapped - frame.width)
     } else {
-      nextX = clamp(snap(xSnap.snapped), 0, boardSize.width - frame.width)
+      nextX = snap(xSnap.snapped)
     }
     if (xSnap.guide) {
       guides.push(xSnap.guide)
@@ -185,11 +187,11 @@ function getMoveFrame(
     const bottomDelta = Math.abs(top + frame.height - ySnap.snapped)
 
     if (centerDelta <= topDelta && centerDelta <= bottomDelta) {
-      nextY = clamp(snap(ySnap.snapped - frame.height / 2), 0, boardSize.height - frame.height)
+      nextY = snap(ySnap.snapped - frame.height / 2)
     } else if (bottomDelta < topDelta) {
-      nextY = clamp(snap(ySnap.snapped - frame.height), 0, boardSize.height - frame.height)
+      nextY = snap(ySnap.snapped - frame.height)
     } else {
-      nextY = clamp(snap(ySnap.snapped), 0, boardSize.height - frame.height)
+      nextY = snap(ySnap.snapped)
     }
     if (ySnap.guide) {
       guides.push(ySnap.guide)
@@ -226,8 +228,8 @@ function getResizeFrame(
     )
     if (snapResult.snapped !== null) {
       const right = normalized.x + normalized.width
-      next.x = clamp(snap(snapResult.snapped), 0, right)
-      next.width = clamp(snap(right - next.x), 0, boardSize.width)
+      next.x = snap(snapResult.snapped)
+      next.width = Math.max(0, snap(right - next.x))
       if (snapResult.guide) {
         guides.push(snapResult.guide)
       }
@@ -240,7 +242,7 @@ function getResizeFrame(
       'vertical',
     )
     if (snapResult.snapped !== null) {
-      next.width = clamp(snap(snapResult.snapped - normalized.x), 0, boardSize.width - normalized.x)
+      next.width = Math.max(0, snap(snapResult.snapped - normalized.x))
       if (snapResult.guide) {
         guides.push(snapResult.guide)
       }
@@ -254,8 +256,8 @@ function getResizeFrame(
     )
     if (snapResult.snapped !== null) {
       const bottom = normalized.y + normalized.height
-      next.y = clamp(snap(snapResult.snapped), 0, bottom)
-      next.height = clamp(snap(bottom - next.y), 0, boardSize.height)
+      next.y = snap(snapResult.snapped)
+      next.height = Math.max(0, snap(bottom - next.y))
       if (snapResult.guide) {
         guides.push(snapResult.guide)
       }
@@ -268,7 +270,7 @@ function getResizeFrame(
       'horizontal',
     )
     if (snapResult.snapped !== null) {
-      next.height = clamp(snap(snapResult.snapped - normalized.y), 0, boardSize.height - normalized.y)
+      next.height = Math.max(0, snap(snapResult.snapped - normalized.y))
       if (snapResult.guide) {
         guides.push(snapResult.guide)
       }
@@ -281,13 +283,18 @@ function getResizeFrame(
   }
 }
 
-function makeBadge(targetId: string | undefined, componentId: string, projectBoards: { id: string; name: string }[]) {
+function makeBadge(
+  targetId: string | undefined,
+  componentId: string,
+  projectBoards: { id: string; name: string }[],
+  modalLabel: string,
+) {
   if (!targetId) {
     return null
   }
 
   if (targetId === componentId) {
-    return '→ 弹窗'
+    return modalLabel
   }
 
   const board = projectBoards.find((item) => item.id === targetId)
@@ -325,6 +332,7 @@ function getResizeDraft(
 
 export function BoardCanvas() {
   const project = useAppStore((state) => state.project)
+  const locale = useAppStore((state) => state.locale)
   const activeBoardId = useAppStore((state) => state.activeBoardId)
   const selectedComponentId = useAppStore((state) => state.selectedComponentId)
   const selectedComponentIds = useAppStore((state) => state.selectedComponentIds)
@@ -340,6 +348,7 @@ export function BoardCanvas() {
   const updateComponentFrames = useAppStore((state) => state.updateComponentFrames)
   const deleteComponent = useAppStore((state) => state.deleteComponent)
   const duplicateComponent = useAppStore((state) => state.duplicateComponent)
+  const duplicateComponents = useAppStore((state) => state.duplicateComponents)
 
   const [fitScale, setFitScale] = useState(1)
   const [guides, setGuides] = useState<Guide[]>([])
@@ -359,6 +368,7 @@ export function BoardCanvas() {
     () => board?.components.find((component) => component.id === selectedComponentId) ?? null,
     [board, selectedComponentId],
   )
+  const isPlacingComponent = Boolean(pendingComponentType)
   const otherComponents = useMemo(
     () => board?.components.filter((component) => !selectedComponentIds.includes(component.id)) ?? [],
     [board, selectedComponentIds],
@@ -502,18 +512,11 @@ export function BoardCanvas() {
 
       if (transformSession.mode === 'move') {
         if (transformSession.componentIds.length > 1) {
-          const minX = Math.min(...transformSession.origins.map((item) => item.x))
-          const minY = Math.min(...transformSession.origins.map((item) => item.y))
-          const maxX = Math.max(...transformSession.origins.map((item) => item.x + item.width))
-          const maxY = Math.max(...transformSession.origins.map((item) => item.y + item.height))
-          const boundedDeltaX = clamp(deltaX, -minX, project.boardSize.width - maxX)
-          const boundedDeltaY = clamp(deltaY, -minY, project.boardSize.height - maxY)
-
           updateComponentFrames(
             transformSession.origins.map((item) => ({
               id: item.id,
-              x: item.x + boundedDeltaX,
-              y: item.y + boundedDeltaY,
+              x: item.x + deltaX,
+              y: item.y + deltaY,
               width: item.width,
               height: item.height,
             })),
@@ -607,21 +610,35 @@ export function BoardCanvas() {
     mode: TransformSession['mode'],
     handle?: ResizeHandle,
   ) => {
-    if (event.button !== 0 || !boardRef.current) {
+    if (useAppStore.getState().pendingComponentType || event.button !== 0 || !boardRef.current) {
       return
     }
 
-    const found = findComponentById(project, componentId)
+    let nextProject = project
+    let nextComponentId = componentId
+    let componentIds =
+      mode === 'move' && selectedComponentIds.includes(componentId) && selectedComponentIds.length > 1
+        ? selectedComponentIds
+        : [componentId]
+
+    if (mode === 'move' && event.altKey) {
+      const duplicatedIds = duplicateComponents(componentIds, { x: 0, y: 0 })
+      const duplicatedProject = useAppStore.getState().project
+
+      if (duplicatedIds.length > 0 && duplicatedProject) {
+        nextProject = duplicatedProject
+        nextComponentId = duplicatedIds.at(-1) ?? duplicatedIds[0]
+        componentIds = duplicatedIds
+      }
+    }
+
+    const found = findComponentById(nextProject, nextComponentId)
     if (!found) {
       return
     }
 
-    const componentIds =
-      mode === 'move' && selectedComponentIds.includes(componentId) && selectedComponentIds.length > 1
-        ? selectedComponentIds
-        : [componentId]
     const origins = componentIds
-      .map((id) => findComponentById(project, id))
+      .map((id) => findComponentById(nextProject, id))
       .filter((item): item is NonNullable<typeof item> => Boolean(item))
       .map(({ component }) => ({
         id: component.id,
@@ -633,17 +650,17 @@ export function BoardCanvas() {
 
     event.preventDefault()
     event.stopPropagation()
-    if (componentIds.length > 1) {
+    if (!event.altKey && componentIds.length > 1) {
       selectComponents(componentIds)
-    } else {
-      selectComponent(componentId)
+    } else if (!event.altKey) {
+      selectComponent(nextComponentId)
     }
     setEditingComponentId(null)
     setContextMenu(null)
 
     setTransformSession({
       mode,
-      componentId,
+      componentId: nextComponentId,
       componentIds,
       rect: boardRef.current.getBoundingClientRect(),
       scale,
@@ -694,9 +711,7 @@ export function BoardCanvas() {
           >
             {board.components.length === 0 ? (
               <div className="canvas-empty-state">
-                <div className="canvas-empty-state__eyebrow">New Page</div>
-                <strong>Pick a component and click or drag on canvas.</strong>
-                <span>单击使用默认尺寸落组件，拖拽按框选尺寸落组件。</span>
+                <span>{t(locale, 'clickToPlace')}</span>
               </div>
             ) : null}
 
@@ -740,17 +755,20 @@ export function BoardCanvas() {
               const firstInteraction = component.interactions[0]
               const badge =
                 firstInteraction?.action === 'showModal'
-                  ? makeBadge(firstInteraction.target, component.id, [])
-                  : makeBadge(firstInteraction?.target, component.id, project.boards)
+                  ? makeBadge(firstInteraction.target, component.id, [], t(locale, 'modalBadge'))
+                  : makeBadge(firstInteraction?.target, component.id, project.boards, t(locale, 'modalBadge'))
 
               return (
                 <WireframeBlock
-                  key={component.id}
+                  key={`${component.id}-${isPlacingComponent ? 'placing' : 'free'}`}
                   component={component}
                   selected={selectedComponentIds.includes(component.id)}
                   editing={editingComponentId === component.id}
                   badge={badge}
-                  onPointerDown={(event) => startTransform(component.id, event, 'move')}
+                  interactive={!isPlacingComponent}
+                  onPointerDown={
+                    isPlacingComponent ? undefined : (event) => startTransform(component.id, event, 'move')
+                  }
                   onContextMenu={(event) => {
                     event.preventDefault()
                     selectComponent(component.id)
@@ -760,11 +778,15 @@ export function BoardCanvas() {
                       componentId: component.id,
                     })
                   }}
-                  onSelect={() => {
-                    selectComponent(component.id)
-                    setContextMenu(null)
-                  }}
-                  onStartEdit={() => setEditingComponentId(component.id)}
+                  onSelect={
+                    isPlacingComponent
+                      ? undefined
+                      : () => {
+                          selectComponent(component.id)
+                          setContextMenu(null)
+                        }
+                  }
+                  onStartEdit={isPlacingComponent ? undefined : () => setEditingComponentId(component.id)}
                   onCommitName={(value) => {
                     updateComponent(component.id, { name: value })
                     setEditingComponentId(null)
@@ -788,7 +810,7 @@ export function BoardCanvas() {
                     key={handle}
                     type="button"
                     className={`canvas-selection__handle canvas-selection__handle--${handle}`}
-                    aria-label={`调整组件大小 ${handle}`}
+                    aria-label={t(locale, 'resizeComponent', { handle })}
                     onPointerDown={(event) => startTransform(selectedComponent.id, event, 'resize', handle)}
                   />
                 ))}
@@ -802,21 +824,21 @@ export function BoardCanvas() {
         <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
           <button
             type="button"
-            onClick={() => {
+          onClick={() => {
               duplicateComponent(contextMenu.componentId)
               setContextMenu(null)
             }}
           >
-            复制
+            {t(locale, 'duplicate')}
           </button>
           <button
             type="button"
-            onClick={() => {
+          onClick={() => {
               deleteComponent(contextMenu.componentId)
               setContextMenu(null)
             }}
           >
-            删除
+            {t(locale, 'delete')}
           </button>
           {pendingComponentType ? (
             <button
@@ -826,7 +848,7 @@ export function BoardCanvas() {
                 setContextMenu(null)
               }}
             >
-              退出放置
+              {t(locale, 'exitPlacement')}
             </button>
           ) : null}
         </div>
