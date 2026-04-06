@@ -2,7 +2,9 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前按参考仓 wireframe mode 渲染分组骨架，而非仅展示图标名称
-3. 更新后检查所属 `.folder.md`
+3. 选中态补入更明显但低饱和的强调样式钩子
+4. 当前支持待放置时切换为纯展示态，屏蔽块内交互
+5. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactElement } from 'react'
@@ -15,6 +17,7 @@ interface WireframeBlockProps {
   editing?: boolean
   preview?: boolean
   badge?: string | null
+  interactive?: boolean
   onPointerDown?: (event: PointerEvent<HTMLDivElement>) => void
   onPointerUp?: (event: PointerEvent<HTMLDivElement>) => void
   onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void
@@ -461,6 +464,7 @@ export function WireframeBlock(props: WireframeBlockProps) {
     editing,
     preview,
     badge,
+    interactive = true,
     onPointerDown,
     onPointerUp,
     onContextMenu,
@@ -480,11 +484,24 @@ export function WireframeBlock(props: WireframeBlockProps) {
     onCommitName?.(value.trim() || component.name)
   }
 
+  const interactiveHandlers = interactive
+    ? {
+        onPointerDown,
+        onPointerUp,
+        onContextMenu,
+        onClick: (event: MouseEvent<HTMLDivElement>) => {
+          event.stopPropagation()
+          onSelect?.()
+        },
+      }
+    : {}
+
   return (
     <div
       className={[
         'wireframe-block',
         selected ? 'is-selected' : '',
+        selected ? 'is-selected-emphasis' : '',
         preview ? 'is-preview' : '',
         component.type === 'Modal' || component.type === 'modal' ? 'is-modal' : '',
       ]
@@ -496,14 +513,9 @@ export function WireframeBlock(props: WireframeBlockProps) {
         width: component.width,
         height: component.height,
         justifyContent: 'stretch',
+        pointerEvents: interactive ? 'auto' : 'none',
       }}
-      onPointerDown={onPointerDown}
-      onPointerUp={onPointerUp}
-      onContextMenu={onContextMenu}
-      onClick={(event) => {
-        event.stopPropagation()
-        onSelect?.()
-      }}
+      {...interactiveHandlers}
     >
       {badge ? <span className="wireframe-block__badge">{badge}</span> : null}
 
@@ -538,6 +550,8 @@ export function WireframeBlock(props: WireframeBlockProps) {
               }}
               onPointerDown={(event) => event.stopPropagation()}
             />
+          ) : !interactive ? (
+            <span className="wireframe-block__name-button">{component.name}</span>
           ) : preview ? (
             <span className="wireframe-block__name-button">{component.name}</span>
           ) : (
