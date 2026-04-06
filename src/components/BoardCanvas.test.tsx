@@ -3,7 +3,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、palette header 删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示、通用块创建、组件选中态强化、组件越界编辑与 clipped 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名回归
-3. 新增待放置期间禁止选中其他图层的回归
+3. 新增待放置期间禁止选中其他图层、placement toast 与拖动一次性 undo 的回归
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -751,6 +751,9 @@ describe('BoardCanvas', () => {
 
     expect(paletteButton.className).toContain('is-active')
     expect(useAppStore.getState().pendingComponentType).toBe('button')
+    expect(screen.getByRole('status').textContent).toContain(
+      'Click the active component in the left palette again to exit placement.',
+    )
     const selectedBefore = useAppStore.getState().selectedComponentId
 
     const existingBlock = container.querySelector('.wireframe-block')
@@ -764,6 +767,54 @@ describe('BoardCanvas', () => {
     expect(paletteButton.className).toContain('is-active')
     expect(useAppStore.getState().pendingComponentType).toBe('button')
     expect(useAppStore.getState().selectedComponentId).toBe(selectedBefore)
+  })
+
+  it('commits a drag as one undo step instead of replaying intermediate positions', () => {
+    const project = createProject('Test Project', 'Desktop')
+    const board = project.boards[0]
+    const component = createComponent('Card', board, project.boardSize, { x: 48, y: 48 })
+    board.components.push(component)
+    useAppStore.getState().replaceProject(project)
+
+    const { container } = render(<App />)
+    const block = container.querySelector('.wireframe-block')
+    const canvas = container.querySelector('.board-canvas') as HTMLDivElement | null
+
+    expect(block).not.toBeNull()
+    expect(canvas).not.toBeNull()
+
+    const scale = Number(canvas?.style.transform.replace('scale(', '').replace(')', ''))
+
+    fireEvent.pointerDown(block as Element, {
+      button: 0,
+      clientX: 60 * scale,
+      clientY: 60 * scale,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 132 * scale,
+      clientY: 96 * scale,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 180 * scale,
+      clientY: 140 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 180 * scale,
+      clientY: 140 * scale,
+    })
+
+    const moved = useAppStore.getState().project?.boards[0]?.components[0]
+
+    expect(useAppStore.getState().history.past).toHaveLength(1)
+    expect(moved?.x).not.toBe(48)
+    expect(moved?.y).not.toBe(48)
+
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
+
+    const undone = useAppStore.getState().project?.boards[0]?.components[0]
+
+    expect(undone?.x).toBe(48)
+    expect(undone?.y).toBe(48)
   })
 
 

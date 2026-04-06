@@ -4,8 +4,9 @@
 2. 当前统一画布交互，补齐点击放置、框选多选、八向缩放与空白提示层
 3. 空白提示层收敛为单句提示，组件按钮进入连续放置
 4. 当前支持 Option/Alt 拖拽复制所选组件与越界移动缩放
-5. 更新后检查所属 `.folder.md`
+5. 拖动与缩放改为本地预览，松手一次性提交历史，避免 undo 按轨迹回放
 6. 待放置期间屏蔽其他图层的选中与拖拽入口
+7. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
@@ -62,6 +63,11 @@ type TransformSession = {
   origin: Pick<ProtoComponent, 'x' | 'y' | 'width' | 'height'>
   origins: Array<Pick<ProtoComponent, 'id' | 'x' | 'y' | 'width' | 'height'>>
   handle?: ResizeHandle
+}
+
+type TransformPreview = {
+  frames: Array<Pick<ProtoComponent, 'id' | 'x' | 'y' | 'width' | 'height'>>
+  guides: Guide[]
 }
 
 type ContextMenuState = {
@@ -356,12 +362,14 @@ export function BoardCanvas() {
   const [placementDraft, setPlacementDraft] = useState<PlacementDraft | null>(null)
   const [selectionDraft, setSelectionDraft] = useState<PlacementDraft | null>(null)
   const [transformSession, setTransformSession] = useState<TransformSession | null>(null)
+  const [transformPreview, setTransformPreview] = useState<TransformPreview | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
   const placementSessionRef = useRef<PlacementSession | null>(null)
   const placementDraftRef = useRef<PlacementDraft | null>(null)
   const selectionSessionRef = useRef<SelectionSession | null>(null)
   const selectionDraftRef = useRef<PlacementDraft | null>(null)
+  const transformPreviewRef = useRef<TransformPreview | null>(null)
 
   const board = project && activeBoardId ? getBoardById(project, activeBoardId) ?? null : null
   const selectedComponent = useMemo(
@@ -369,6 +377,16 @@ export function BoardCanvas() {
     [board, selectedComponentId],
   )
   const isPlacingComponent = Boolean(pendingComponentType)
+  const transformPreviewMap = useMemo(
+    () => new Map(transformPreview?.frames.map((frame) => [frame.id, frame]) ?? []),
+    [transformPreview],
+  )
+  const visibleSelectedComponent = selectedComponent
+    ? (() => {
+        const preview = transformPreviewMap.get(selectedComponent.id)
+        return preview ? { ...selectedComponent, ...preview } : selectedComponent
+      })()
+    : null
   const otherComponents = useMemo(
     () => board?.components.filter((component) => !selectedComponentIds.includes(component.id)) ?? [],
     [board, selectedComponentIds],
@@ -411,6 +429,10 @@ export function BoardCanvas() {
   }, [pendingComponentType])
 
   useEffect(() => {
+    transformPreviewRef.current = transformPreview
+  }, [transformPreview])
+
+  useEffect(() => {
     if (!pendingComponentType || !project) {
       return
     }
@@ -432,7 +454,6 @@ export function BoardCanvas() {
         return
       }
 
-      const point = getBoardPoint(session.rect, session.scale, event.clientX, event.clientY)
       const hasDragged =
         draft &&
         (draft.width >= PLACEMENT_DRAG_THRESHOLD || draft.height >= PLACEMENT_DRAG_THRESHOLD)
@@ -440,6 +461,7 @@ export function BoardCanvas() {
       if (hasDragged && draft) {
         placeComponent(session.type, draft)
       } else {
+        const point = getBoardPoint(session.rect, session.scale, event.clientX, event.clientY)
         addComponent(session.type, { x: point.x, y: point.y })
       }
 
@@ -456,6 +478,10 @@ export function BoardCanvas() {
   }, [addComponent, pendingComponentType, placeComponent, project])
 
   useEffect(() => {
+    if (transformSession) {
+      return
+    }
+
     const handlePointerMove = (event: PointerEvent) => {
       const session = selectionSessionRef.current
       if (!session) {
@@ -494,11 +520,16 @@ export function BoardCanvas() {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [board?.components, selectComponents])
+  }, [board?.components, selectComponents, transformSession])
 
   useEffect(() => {
     if (!transformSession || !project) {
       return
+    }
+
+    const setPreview = (preview: TransformPreview | null) => {
+      transformPreviewRef.current = preview
+      setTransformPreview(preview)
     }
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -512,16 +543,15 @@ export function BoardCanvas() {
 
       if (transformSession.mode === 'move') {
         if (transformSession.componentIds.length > 1) {
-          updateComponentFrames(
-            transformSession.origins.map((item) => ({
-              id: item.id,
-              x: item.x + deltaX,
-              y: item.y + deltaY,
-              width: item.width,
-              height: item.height,
-            })),
-          )
+          const frames = transformSession.origins.map((item) => ({
+            id: item.id,
+            x: item.x + deltaX,
+            y: item.y + deltaY,
+            width: item.width,
+            height: item.height,
+          }))
           setGuides([])
+          setPreview({ frames, guides: [] })
           return
         }
 
@@ -533,8 +563,11 @@ export function BoardCanvas() {
         }
         const normalized = normalizeComponentFrame(found.component.type, moved, project.boardSize)
         const snapped = getMoveFrame(normalized, project.boardSize, otherComponents)
-        updateComponent(found.component.id, snapped.frame)
         setGuides(snapped.guides)
+        setPreview({
+          frames: [{ id: found.component.id, ...snapped.frame }],
+          guides: snapped.guides,
+        })
         return
       }
 
@@ -546,12 +579,34 @@ export function BoardCanvas() {
         project.boardSize,
         otherComponents,
       )
-      updateComponent(found.component.id, resized.frame)
       setGuides(resized.guides)
+      setPreview({
+        frames: [{ id: found.component.id, ...resized.frame }],
+        guides: resized.guides,
+      })
     }
 
     const handlePointerUp = () => {
+      const session = transformSession
+      const preview = transformPreviewRef.current
+      const frames = preview?.frames ?? []
+
+      if (session.mode === 'move') {
+        if (session.componentIds.length > 1) {
+          const nextFrames = frames.length > 0 ? frames : session.origins
+          updateComponentFrames(nextFrames)
+        } else {
+          const frame = frames[0] ?? session.origin
+          updateComponent(session.componentId, frame)
+        }
+      } else {
+        const frame = frames[0] ?? session.origin
+        updateComponent(session.componentId, frame)
+      }
+
       setTransformSession(null)
+      setTransformPreview(null)
+      transformPreviewRef.current = null
       setGuides([])
     }
 
@@ -675,6 +730,16 @@ export function BoardCanvas() {
       origins,
       handle,
     })
+    const previewFrames = origins.map((item) => ({
+      id: item.id,
+      x: item.x,
+      y: item.y,
+      width: item.width,
+      height: item.height,
+    }))
+    const preview: TransformPreview = { frames: previewFrames, guides: [] }
+    transformPreviewRef.current = preview
+    setTransformPreview(preview)
   }
 
   return (
@@ -752,6 +817,8 @@ export function BoardCanvas() {
             ))}
 
             {board.components.map((component) => {
+              const preview = transformPreviewMap.get(component.id)
+              const displayedComponent = preview ? { ...component, ...preview } : component
               const firstInteraction = component.interactions[0]
               const badge =
                 firstInteraction?.action === 'showModal'
@@ -761,7 +828,7 @@ export function BoardCanvas() {
               return (
                 <WireframeBlock
                   key={`${component.id}-${isPlacingComponent ? 'placing' : 'free'}`}
-                  component={component}
+                  component={displayedComponent}
                   selected={selectedComponentIds.includes(component.id)}
                   editing={editingComponentId === component.id}
                   badge={badge}
@@ -795,14 +862,14 @@ export function BoardCanvas() {
               )
             })}
 
-            {selectedComponent && selectedComponentIds.length === 1 ? (
+            {visibleSelectedComponent && selectedComponentIds.length === 1 ? (
               <div
                 className="canvas-selection"
                 style={{
-                  left: selectedComponent.x,
-                  top: selectedComponent.y,
-                  width: selectedComponent.width,
-                  height: selectedComponent.height,
+                  left: visibleSelectedComponent.x,
+                  top: visibleSelectedComponent.y,
+                  width: visibleSelectedComponent.width,
+                  height: visibleSelectedComponent.height,
                 }}
               >
                 {(['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as ResizeHandle[]).map((handle) => (
@@ -811,7 +878,7 @@ export function BoardCanvas() {
                     type="button"
                     className={`canvas-selection__handle canvas-selection__handle--${handle}`}
                     aria-label={t(locale, 'resizeComponent', { handle })}
-                    onPointerDown={(event) => startTransform(selectedComponent.id, event, 'resize', handle)}
+                    onPointerDown={(event) => startTransform(visibleSelectedComponent.id, event, 'resize', handle)}
                   />
                 ))}
               </div>

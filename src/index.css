@@ -1,9 +1,12 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前收敛为单一线框工作区样式，并保留框选与图层拖拽反馈
-3. 左栏仅保留项目名与组件网格，toolbar 不再展示项目名输入
-4. 更新后检查所属 `.folder.md`
+2. 当前收敛为单一线框工作区样式，locale 改走浏览器检测，不再提供语言切换控件
+3. 左栏收敛为单滚动容器，右栏标题结构统一
+4. 左栏仅保留项目名与组件网格，toolbar 不再展示项目名输入
+5. 预览态改为原位，并锁定非画布区域
+6. workspace 底部 toast 采用悬浮胶囊样式
+7. 更新后检查所属 `.folder.md`
 */
 
 :root {
@@ -50,6 +53,7 @@ body {
   height: 100%;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 244, 243, 0.96) 100%),
     repeating-linear-gradient(
@@ -114,7 +118,7 @@ body {
   transform: translateY(-1px);
 }
 
-.toolbar__button--primary,
+.panel__export-button--primary,
 .dialog__primary {
   border-color: #111827;
   background: #111827;
@@ -127,6 +131,25 @@ body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+.workspace-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  z-index: 20;
+  max-width: min(520px, calc(100% - 32px));
+  transform: translateX(-50%);
+  padding: 10px 14px;
+  border: 1px solid rgba(17, 24, 39, 0.18);
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.92);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
 }
 
 .workspace__sidebar {
@@ -150,6 +173,19 @@ body {
   padding: 12px;
 }
 
+.is-preview-locked {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.is-preview-locked > * {
+  pointer-events: none;
+}
+
+.is-preview-locked * {
+  cursor: not-allowed;
+}
+
 .panel {
   display: flex;
   height: 100%;
@@ -158,11 +194,16 @@ body {
   gap: 12px;
 }
 
-.panel__header,
-.panel__section-title {
+.panel__header {
+  display: flex;
+  align-items: center;
+}
+
+.panel__title {
   font-size: 14px;
   font-weight: 700;
   color: #111827;
+  margin: 0;
 }
 
 .panel__eyebrow {
@@ -176,6 +217,10 @@ body {
 .panel__header--palette .panel__eyebrow {
   width: 100%;
   margin-bottom: 0;
+}
+
+.panel__header--section {
+  padding-bottom: 2px;
 }
 
 .panel__project-name {
@@ -238,6 +283,24 @@ body {
   gap: 8px;
 }
 
+.panel__export-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.panel__export-button {
+  flex: 2;
+}
+
+.panel__export-button--primary {
+  background: #111827;
+  color: #fff;
+}
+
+.panel__copy-button {
+  flex: 1;
+}
+
 .component-palette {
   display: grid;
   flex: 1;
@@ -245,6 +308,10 @@ body {
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
+}
+
+.panel--palette {
+  overflow: hidden;
 }
 
 .component-palette__section {
@@ -361,18 +428,6 @@ body {
   pointer-events: none;
 }
 
-.canvas-empty-state strong {
-  font-size: 16px;
-  color: #111827;
-}
-
-.canvas-empty-state__eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6b7280;
-}
-
 .canvas-placement-draft {
   position: absolute;
   border: 1px dashed #111827;
@@ -395,6 +450,12 @@ body {
 .wireframe-block.is-selected {
   outline: 2px solid #111827;
   outline-offset: 1px;
+}
+
+.wireframe-block.is-selected-emphasis {
+  box-shadow:
+    0 0 0 2px rgba(17, 24, 39, 0.12),
+    0 10px 24px rgba(15, 23, 42, 0.14);
 }
 
 .wireframe-block.is-modal {
@@ -617,11 +678,8 @@ body {
   cursor: grabbing;
 }
 
-.layer-item small {
-  color: #52525b;
-}
-
 .board-strip {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -630,13 +688,14 @@ body {
   padding: 10px 12px;
   border-top: 1px solid #d4d4d4;
   background: rgba(250, 250, 249, 0.96);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .board-strip__list {
   display: flex;
   gap: 10px;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: visible;
   flex: 1;
 }
 
@@ -655,6 +714,11 @@ body {
 .board-chip.is-active {
   border-color: #111827;
   background: #ececec;
+}
+
+.board-chip.is-menu-open {
+  overflow: visible;
+  z-index: 3;
 }
 
 .board-chip input {
@@ -678,9 +742,7 @@ body {
 
 .board-chip__menu-popover {
   position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 2;
+  z-index: 4;
   display: grid;
   min-width: 108px;
   padding: 6px;
@@ -789,6 +851,31 @@ body {
   background: #0f172a;
 }
 
+.preview-inline {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid #d4d4d4;
+  border-radius: 18px;
+  background:
+    linear-gradient(rgba(17, 24, 39, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 24, 39, 0.03) 1px, transparent 1px),
+    #efefed;
+  background-size: 16px 16px;
+  padding: 16px;
+}
+
+.preview-inline__stage {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+}
+
 .preview-overlay__topbar {
   width: 100%;
   display: flex;
@@ -824,6 +911,29 @@ body {
   inset: 0;
   background: rgba(15, 23, 42, 0.35);
   animation: fade-in 0.2s ease;
+}
+
+.preview-modal-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(320px, calc(100% - 48px));
+  transform: translate(-50%, -50%);
+  padding: 20px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.2);
+  color: #111827;
+}
+
+.preview-modal-card strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.preview-modal-card p {
+  margin: 0;
+  line-height: 1.5;
 }
 
 .settings-grid {
@@ -957,12 +1067,22 @@ body {
     align-items: stretch;
   }
 
+  .toolbar__identity,
+  .dialog__header {
+    justify-content: space-between;
+    width: 100%;
+  }
+
   .workspace {
     grid-template-columns: 1fr;
     overflow: visible;
   }
 
   .workspace__sidebar {
+    overflow: visible;
+  }
+
+  .panel--palette {
     overflow: visible;
   }
 
@@ -983,8 +1103,10 @@ body {
     height: auto;
   }
 
+  .component-palette,
   .panel__editor,
   .layer-list {
+    overflow: visible;
     max-height: none;
   }
 }

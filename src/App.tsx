@@ -1,9 +1,12 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前统一为单一画布工作流，项目名入口固定在左栏，顶部仅保留设备与动作
+2. 当前统一为单一画布工作流，项目名入口固定在左栏，locale 由浏览器自动检测
 3. Escape 只清当前已选组件，不清待放置组件
-4. 更新后检查所属 `.folder.md`
+4. 当前复用组件复制链路支持快捷键复制粘贴
+5. 顶部 toolbar 与 preview 入口已删除，导出能力移到右栏顶部
+6. 待放置时在 workspace 底部居中显示退出放置 toast
+7. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useRef } from 'react'
@@ -11,12 +14,11 @@ import { BoardCanvas } from './components/BoardCanvas'
 import { BoardStrip } from './components/BoardStrip'
 import { ComponentPalette } from './components/ComponentPalette'
 import { InteractionPanel } from './components/InteractionPanel'
-import { PreviewOverlay } from './components/PreviewOverlay'
 import { SetupDialog } from './components/SetupDialog'
-import { Toolbar } from './components/Toolbar'
 import { useAppStore } from './stores/appStore'
-import { DEVICE_PRESETS } from './utils/constants'
-import { downloadJson } from './utils/project'
+import { t } from './utils/i18n'
+import { findComponentById } from './utils/project'
+import type { ProtoComponent } from './types/schema'
 import { createDebouncedSnapshotSaver } from './utils/storage'
 
 const saveSnapshot = createDebouncedSnapshotSaver(500)
@@ -30,22 +32,21 @@ function isTypingTarget(target: EventTarget | null) {
 }
 
 export default function App() {
-  const importRef = useRef<HTMLInputElement>(null)
+  const clipboardRef = useRef<ProtoComponent[]>([])
   const project = useAppStore((state) => state.project)
   const settings = useAppStore((state) => state.settings)
+  const locale = useAppStore((state) => state.locale)
   const activeBoardId = useAppStore((state) => state.activeBoardId)
+  const pendingComponentType = useAppStore((state) => state.pendingComponentType)
   const selectedComponentId = useAppStore((state) => state.selectedComponentId)
   const selectedComponentIds = useAppStore((state) => state.selectedComponentIds)
   const wireframe = useAppStore((state) => state.wireframe)
-  const isPreview = useAppStore((state) => state.isPreview)
   const initializeProject = useAppStore((state) => state.initializeProject)
-  const importProjectJson = useAppStore((state) => state.importProjectJson)
-  const exportProject = useAppStore((state) => state.exportProjectJson)
   const addBoard = useAppStore((state) => state.addBoard)
   const deleteSelectedComponents = useAppStore((state) => state.deleteSelectedComponents)
   const duplicateComponent = useAppStore((state) => state.duplicateComponent)
   const moveSelectedBy = useAppStore((state) => state.moveSelectedBy)
-  const togglePreview = useAppStore((state) => state.togglePreview)
+  const pasteComponents = useAppStore((state) => state.pasteComponents)
   const getWorkspaceSnapshot = useAppStore((state) => state.getWorkspaceSnapshot)
   const undo = useAppStore((state) => state.undo)
   const redo = useAppStore((state) => state.redo)
@@ -57,26 +58,16 @@ export default function App() {
     }
 
     saveSnapshot(getWorkspaceSnapshot())
-  }, [project, settings, activeBoardId, wireframe, getWorkspaceSnapshot])
+  }, [project, settings, locale, activeBoardId, wireframe, getWorkspaceSnapshot])
+
+  useEffect(() => {
+    document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'
+    document.title = locale === 'zh' ? '线框原型工具' : 'Wireframe Prototype Tool'
+  }, [locale])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const meta = event.metaKey || event.ctrlKey
-
-      if (meta && event.key.toLowerCase() === 'p') {
-        event.preventDefault()
-        if (project) {
-          togglePreview()
-        }
-      }
-
-      if (meta && event.key.toLowerCase() === 's') {
-        event.preventDefault()
-        if (!project) {
-          return
-        }
-        downloadJson(`${project.project || 'wireframe-project'}.json`, JSON.parse(exportProject()))
-      }
 
       if (isTypingTarget(event.target)) {
         return
@@ -85,6 +76,22 @@ export default function App() {
       if (meta && event.key.toLowerCase() === 'd' && selectedComponentId) {
         event.preventDefault()
         duplicateComponent(selectedComponentId)
+      }
+
+      if (meta && event.key.toLowerCase() === 'c' && project && selectedComponentIds.length > 0) {
+        event.preventDefault()
+        clipboardRef.current = selectedComponentIds
+          .map((componentId) => findComponentById(project, componentId)?.component)
+          .filter((component): component is ProtoComponent => Boolean(component))
+          .map((component) => ({
+            ...component,
+            interactions: component.interactions.map((interaction) => ({ ...interaction })),
+          }))
+      }
+
+      if (meta && event.key.toLowerCase() === 'v' && clipboardRef.current.length > 0) {
+        event.preventDefault()
+        pasteComponents(clipboardRef.current)
       }
 
       if (meta && event.key.toLowerCase() === 'n') {
@@ -127,14 +134,13 @@ export default function App() {
     addBoard,
     deleteSelectedComponents,
     duplicateComponent,
-    exportProject,
     moveSelectedBy,
+    pasteComponents,
     project,
     redo,
     selectedComponentId,
     selectedComponentIds.length,
     selectComponent,
-    togglePreview,
     undo,
   ])
 
@@ -148,52 +154,29 @@ export default function App() {
     )
   }
 
-  const deviceLabel = DEVICE_PRESETS.find((item) => item.key === project.device)?.label ?? project.device
-
   return (
-    <>
-      <div className="app-shell">
-        <Toolbar
-          deviceLabel={deviceLabel}
-          boardSizeLabel={`${project.boardSize.width} × ${project.boardSize.height}`}
-          isPreview={isPreview}
-          onExport={() => downloadJson(`${project.project || 'wireframe-project'}.json`, JSON.parse(exportProject()))}
-          onImport={() => importRef.current?.click()}
-          onTogglePreview={togglePreview}
-        />
+    <div className="app-shell">
+      <div className="workspace">
+        <aside className="workspace__sidebar workspace__sidebar--left">
+          <ComponentPalette />
+        </aside>
 
-        <div className="workspace">
-          <aside className="workspace__sidebar workspace__sidebar--left">
-            <ComponentPalette />
-          </aside>
+        <main className="workspace__center">
+          <BoardCanvas />
+        </main>
 
-          <main className="workspace__center">
-            <BoardCanvas />
-          </main>
-
-          <aside className="workspace__sidebar workspace__sidebar--right">
-            <InteractionPanel />
-          </aside>
-        </div>
-
-        <BoardStrip />
+        <aside className="workspace__sidebar workspace__sidebar--right">
+          <InteractionPanel />
+        </aside>
       </div>
 
-      <input
-        ref={importRef}
-        type="file"
-        accept=".json,application/json"
-        hidden
-        onChange={async (event) => {
-          const file = event.target.files?.[0]
-          if (!file) {
-            return
-          }
-          importProjectJson(await file.text())
-          event.target.value = ''
-        }}
-      />
-      <PreviewOverlay />
-    </>
+      {pendingComponentType ? (
+        <div className="workspace-toast" role="status" aria-live="polite">
+          {t(locale, 'placementToast')}
+        </div>
+      ) : null}
+
+      <BoardStrip />
+    </div>
   )
 }
