@@ -5,29 +5,32 @@
 1. 逻辑变更后更新此 Header
 2. 更新后检查所属 `.folder.md`
 3. 运行时只从 `OPENAI_API_KEY` 读取 key，`base_url` 固定为 SiliconFlow
-4. 仅分析带错误/构建/API 等信号的 chunk，降低无效调用
-5. 解析模型输出只做本地 JSON 截取与轻量修整，失败后记日志并跳过
-6. 默认单 worker，且在每次请求前强制节流，避免持续触发 TPM 限流
+4. Map 阶段走 OpenAI 兼容 batch，避免逐请求触发 TPM 限流
+5. 只分析带错误/构建/API 强信号的片段，并在同文件内合并请求
+6. 模型输出只做本地 JSON 截取与轻量修整，失败后记日志并跳过
 7. 文件级结果增量写入隐藏状态文件，支持断点续跑
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
-import sys
-import traceback
 import time
+import traceback
+import urllib.error
+import urllib.request
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-import threading
-from typing import Any, Iterable
+from typing import Any
 
-import tiktoken
-from openai import OpenAI
+try:
+    import tiktoken
+except ImportError:
+    tiktoken = None
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -38,130 +41,21 @@ INPUT_DIRS = [
 OUTPUT_FILE = PROJECT_ROOT / "codex_qa_summary.md"
 ERROR_LOG_FILE = PROJECT_ROOT / "errors.log"
 STATE_FILE = PROJECT_ROOT / ".codex_qa_state.jsonl"
+BATCH_META_FILE = PROJECT_ROOT / ".codex_qa_batch_meta.json"
+BATCH_INPUT_FILE = PROJECT_ROOT / ".codex_qa_batch_input.jsonl"
+BATCH_OUTPUT_FILE = PROJECT_ROOT / ".codex_qa_batch_output.jsonl"
+BATCH_ERROR_FILE = PROJECT_ROOT / ".codex_qa_batch_error.jsonl"
 OPENAI_BASE_URL = "https://api.siliconflow.cn/v1"
-MAP_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+MAP_MODEL = "deepseek-ai/DeepSeek-V3"
 REDUCE_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 MAX_CHUNK_TOKENS = 3000
 CHUNK_OVERLAP_TOKENS = 200
+MAP_REQUEST_MAX_TOKENS = 2200
+MAP_MAX_TOKENS = 192
+REDUCE_MAX_TOKENS = 448
 REDUCE_BATCH_SIZE = 30
-MAP_MAX_TOKENS = 256
-REDUCE_MAX_TOKENS = 512
-API_CALL_MIN_INTERVAL_SECONDS = 2.0
-DEFAULT_WORKERS = 1
-MAP_REQUEST_MAX_TOKENS = 2400
-STRONG_CHUNK_HINTS = {
-    "traceback",
-    "stack trace",
-    "stacktrace",
-    "exception",
-    "error",
-    "failed",
-    "failure",
-    "syntaxerror",
-    "typeerror",
-    "referenceerror",
-    "valueerror",
-    "keyerror",
-    "attributeerror",
-    "importerror",
-    "modulenotfounderror",
-    "cannot import",
-    "module not found",
-    "permission denied",
-    "unauthorized",
-    "forbidden",
-    "token_mismatch",
-    "http 400",
-    "http 401",
-    "http 403",
-    "http 404",
-    "http 409",
-    "http 422",
-    "http 429",
-    "http 500",
-    "http 502",
-    "http 503",
-    "报错",
-    "异常",
-    "失败",
-    "未找到",
-    "无法导入",
-    "权限不足",
-    "认证失败",
-    "未授权",
-    "拒绝访问",
-}
-COMMAND_HINTS = {
-    "pip ",
-    "pip3 ",
-    "npm ",
-    "pnpm ",
-    "yarn ",
-    "pytest",
-    "python ",
-    "python3 ",
-    "uv ",
-    "cargo ",
-    "go test",
-    "docker ",
-    "build",
-    "deploy",
-    "install",
-    "test",
-}
-FAILURE_HINTS = {
-    "fail",
-    "failed",
-    "error",
-    "exception",
-    "not found",
-    "denied",
-    "unauthorized",
-    "forbidden",
-    "超时",
-    "失败",
-    "报错",
-    "异常",
-    "404",
-    "401",
-    "403",
-    "429",
-    "500",
-}
-API_HINTS = {
-    "api",
-    "auth",
-    "token",
-    "http",
-    "request",
-    "response",
-    "401",
-    "403",
-    "404",
-    "409",
-    "422",
-    "429",
-    "500",
-    "502",
-    "503",
-}
-CODE_FIX_HINTS = {
-    "fix",
-    "fixed",
-    "repair",
-    "patch",
-    "workaround",
-    "resolve",
-    "resolved",
-    "解决",
-    "修复",
-    "改成",
-    "改为",
-    "替换",
-    "升级",
-    "回退",
-    "重试",
-}
+BATCH_POLL_INTERVAL_SECONDS = 30
+REDUCE_REQUEST_INTERVAL_SECONDS = 2.0
 TAG_ORDER = [
     "环境配置",
     "语法错误",
@@ -175,8 +69,17 @@ TAG_ORDER = [
     "其他",
 ]
 ALLOWED_TAGS = set(TAG_ORDER)
-_REQUEST_LOCK = threading.Lock()
-_NEXT_REQUEST_AT = 0.0
+SIGNAL_RE = re.compile(
+    r"traceback|exception|syntaxerror|typeerror|referenceerror|valueerror|keyerror|"
+    r"attributeerror|importerror|modulenotfounderror|module not found|cannot import|"
+    r"permission denied|unauthorized|forbidden|http 4\d\d|http 5\d\d|error|failed|"
+    r"报错|异常|失败|未找到|无法导入|权限不足|认证失败|拒绝访问",
+    re.I,
+)
+COMMAND_RE = re.compile(r"\b(pip3?|npm|pnpm|yarn|pytest|python3?|uv|cargo|docker)\b", re.I)
+API_RE = re.compile(r"\b(api|auth|token|request|response|http|401|403|404|409|422|429|500|502|503)\b", re.I)
+FIX_RE = re.compile(r"fix|fixed|repair|patch|workaround|resolve|resolved|解决|修复|改成|改为|替换|升级|回退|重试", re.I)
+_NEXT_REDUCE_AT = 0.0
 
 
 def require_api_key() -> tuple[str, str]:
@@ -186,92 +89,78 @@ def require_api_key() -> tuple[str, str]:
     raise SystemExit("缺少 OPENAI_API_KEY。可在运行命令层把 SILICONFLOW_API_KEY 映射给它。")
 
 
-def make_client() -> tuple[OpenAI, str]:
-    api_key, source = require_api_key()
-    return OpenAI(api_key=api_key, base_url=OPENAI_BASE_URL), source
-
-
-def make_client_from_key(api_key: str) -> OpenAI:
-    return OpenAI(api_key=api_key, base_url=OPENAI_BASE_URL)
-
-
-def get_encoding(model: str) -> tiktoken.Encoding:
-    try:
-        return tiktoken.encoding_for_model(model)
-    except Exception:
-        return tiktoken.get_encoding("o200k_base")
-
-
 def now_text() -> str:
     return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
 
 
 def log_error(message: str) -> None:
-    ERROR_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with ERROR_LOG_FILE.open("a", encoding="utf-8") as fh:
         fh.write(f"[{now_text()}] {message}\n")
 
 
+def get_encoding() -> Any:
+    if tiktoken is None:
+        return None
+    try:
+        return tiktoken.encoding_for_model(MAP_MODEL)
+    except Exception:
+        return tiktoken.get_encoding("o200k_base")
+
+
+def token_count(text: str, encoding: Any) -> int:
+    if encoding is None:
+        return max(1, len(text) // 4)
+    return len(encoding.encode(text))
+
+
 def strip_code_fences(text: str) -> str:
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-    return cleaned.strip()
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    return text.strip()
 
 
 def safe_json_loads(text: str) -> Any:
-    cleaned = strip_code_fences(text)
-    candidate = cleaned
-    start = -1
+    text = strip_code_fences(text)
+    starts = [index for index in (text.find("{"), text.find("[")) if index != -1]
+    start = min(starts) if starts else -1
+    candidate = text if start == -1 else text[start:]
+    opener = {"{": "}", "[": "]"}
+    closer = {"}": "{", "]": "["}
     stack: list[str] = []
     in_string = False
-    escape = False
-    opener_to_closer = {"{": "}", "[": "]"}
-    closer_to_opener = {"}": "{", "]": "["}
-    start = cleaned.find("{")
-    alt_start = cleaned.find("[")
-    if alt_start != -1 and (start == -1 or alt_start < start):
-        start = alt_start
+    escaped = False
     if start != -1:
-        candidate = cleaned[start:]
-        stack = []
-        in_string = False
-        escape = False
-        for index in range(start, len(cleaned)):
-            char = cleaned[index]
+        for index, char in enumerate(candidate):
             if in_string:
-                if escape:
-                    escape = False
+                if escaped:
+                    escaped = False
                 elif char == "\\":
-                    escape = True
+                    escaped = True
                 elif char == '"':
                     in_string = False
                 continue
             if char == '"':
                 in_string = True
-                continue
-            if char in opener_to_closer:
+            elif char in opener:
                 stack.append(char)
-                continue
-            if char in closer_to_opener and stack and stack[-1] == closer_to_opener[char]:
+            elif char in closer and stack and stack[-1] == closer[char]:
                 stack.pop()
                 if not stack:
-                    candidate = cleaned[start : index + 1]
+                    candidate = candidate[: index + 1]
                     break
-        if stack and not in_string:
-            candidate = cleaned[start:] + "".join(opener_to_closer[item] for item in reversed(stack))
+    if stack and not in_string:
+        candidate += "".join(opener[item] for item in reversed(stack))
     return json.loads(candidate)
 
 
 def load_json_payload(text: str) -> Any:
-    cleaned = text.strip()
     try:
-        return safe_json_loads(cleaned)
+        return safe_json_loads(text)
     except json.JSONDecodeError:
-        compact = strip_code_fences(cleaned).replace("\r", "")
-        compact = re.sub(r",\s*([}\]])", r"\1", compact)
-        compact = compact.replace("\u0000", "")
+        compact = strip_code_fences(text).replace("\r", "")
+        compact = re.sub(r",\s*([}\]])", r"\1", compact).replace("\u0000", "").replace("\ufeff", "")
         return safe_json_loads(compact)
 
 
@@ -283,33 +172,20 @@ def flatten_text(value: Any) -> str:
     if isinstance(value, (int, float, bool)):
         return str(value)
     if isinstance(value, list):
-        parts = [flatten_text(item) for item in value]
-        return "\n".join(part for part in parts if part.strip())
+        return "\n".join(part for part in (flatten_text(item) for item in value) if part.strip())
     if isinstance(value, dict):
-        for key in ("text", "output", "arguments", "content", "message"):
+        for key in ("text", "content", "output", "message", "arguments"):
             if key in value:
                 text = flatten_text(value[key])
                 if text.strip():
                     return text
-        if "text_elements" in value:
-            return flatten_text(value["text_elements"])
         return ""
     return str(value)
-
-
-def render_response_item(payload: dict[str, Any]) -> tuple[str, str] | None:
-    payload_type = payload.get("type")
-    if payload_type == "message" and payload.get("role") in {"user", "assistant"}:
-        text = flatten_text(payload.get("content")).strip()
-        if text:
-            return payload["role"], text
-    return None
 
 
 def parse_turns(path: Path) -> list[str]:
     turns: list[str] = []
     current: list[str] = []
-
     with path.open("r", encoding="utf-8") as fh:
         for line_no, line in enumerate(fh, 1):
             stripped = line.strip()
@@ -322,11 +198,13 @@ def parse_turns(path: Path) -> list[str]:
                 continue
             if record.get("type") != "response_item":
                 continue
-            rendered = render_response_item(record.get("payload", {}))
-            if rendered is None:
+            payload = record.get("payload", {})
+            if not isinstance(payload, dict) or payload.get("type") != "message":
                 continue
-            role, text = rendered
-            text = text.strip()
+            role = payload.get("role")
+            if role not in {"user", "assistant"}:
+                continue
+            text = flatten_text(payload.get("content")).strip()
             if not text:
                 continue
             if role == "user":
@@ -334,22 +212,23 @@ def parse_turns(path: Path) -> list[str]:
                     turns.append("\n".join(current).strip())
                     current = []
                 current.append(f"User:\n{text}")
-                continue
-            if not current:
-                current.append(f"Assistant:\n{text}")
             else:
-                current.append(f"{'Assistant' if role == 'assistant' else 'Tool'}:\n{text}")
-
+                if not current:
+                    current.append(f"Assistant:\n{text}")
+                else:
+                    current.append(f"Assistant:\n{text}")
     if current:
         turns.append("\n".join(current).strip())
     return turns
 
 
-def token_count(text: str, encoding: tiktoken.Encoding) -> int:
-    return len(encoding.encode(text))
-
-
-def split_by_tokens(text: str, encoding: tiktoken.Encoding, chunk_tokens: int, overlap_tokens: int) -> list[str]:
+def split_by_tokens(text: str, encoding: Any, chunk_tokens: int, overlap_tokens: int) -> list[str]:
+    if encoding is None:
+        chunk_chars = chunk_tokens * 4
+        if len(text) <= chunk_chars:
+            return [text]
+        step = max(1, (chunk_tokens - overlap_tokens) * 4)
+        return [text[index : index + chunk_chars] for index in range(0, len(text), step)]
     tokens = encoding.encode(text)
     if len(tokens) <= chunk_tokens:
         return [text]
@@ -365,289 +244,204 @@ def split_by_tokens(text: str, encoding: tiktoken.Encoding, chunk_tokens: int, o
     return chunks
 
 
-def chunk_turns(turns: list[str], encoding: tiktoken.Encoding) -> list[str]:
+def chunk_turns(turns: list[str], encoding: Any) -> list[str]:
     units: list[tuple[str, int]] = []
     for index, turn in enumerate(turns, 1):
-        text = f"[Turn {index}]\n{turn}"
-        subchunks = split_by_tokens(text, encoding, MAX_CHUNK_TOKENS, CHUNK_OVERLAP_TOKENS)
-        for piece_index, piece in enumerate(subchunks, 1):
-            if len(subchunks) == 1:
-                labeled = piece
-            else:
-                labeled = f"[Turn {index} · Part {piece_index}/{len(subchunks)}]\n{piece}"
-            units.append((labeled, token_count(labeled, encoding)))
-
+        parts = split_by_tokens(f"[Turn {index}]\n{turn}", encoding, MAX_CHUNK_TOKENS, CHUNK_OVERLAP_TOKENS)
+        for part_index, part in enumerate(parts, 1):
+            label = part if len(parts) == 1 else f"[Turn {index} · Part {part_index}/{len(parts)}]\n{part}"
+            units.append((label, token_count(label, encoding)))
     chunks: list[str] = []
     current: list[tuple[str, int]] = []
     current_tokens = 0
-
     for text, tokens in units:
         if current and current_tokens + tokens > MAX_CHUNK_TOKENS:
             chunks.append("\n\n".join(item[0] for item in current).strip())
-            overlap_units: list[tuple[str, int]] = []
-            overlap_tokens = 0
-            for unit in reversed(current):
-                overlap_units.insert(0, unit)
-                overlap_tokens += unit[1]
-                if overlap_tokens >= CHUNK_OVERLAP_TOKENS:
-                    break
-            current = overlap_units
+            current = current[-1:]
             current_tokens = sum(item[1] for item in current)
         current.append((text, tokens))
         current_tokens += tokens
-
     if current:
         chunks.append("\n\n".join(item[0] for item in current).strip())
     return [chunk for chunk in chunks if chunk.strip()]
 
 
-def should_analyze_chunk(chunk_text: str) -> bool:
-    lowered = chunk_text.lower()
-    if any(hint in lowered for hint in STRONG_CHUNK_HINTS):
+def has_signal(text: str) -> bool:
+    lowered = text.lower()
+    if SIGNAL_RE.search(lowered):
         return True
-    has_command = any(hint in lowered for hint in COMMAND_HINTS)
-    has_failure = any(hint in lowered for hint in FAILURE_HINTS)
-    has_api_issue = any(hint in lowered for hint in API_HINTS) and has_failure
-    has_code_fix = "```" in chunk_text and any(hint in lowered for hint in CODE_FIX_HINTS)
-    return (has_command and has_failure) or has_api_issue or has_code_fix
+    has_command = bool(COMMAND_RE.search(lowered))
+    has_failure = any(token in lowered for token in ("fail", "failed", "error", "exception", "失败", "报错", "异常", "404", "401", "403", "429", "500"))
+    has_api = bool(API_RE.search(lowered)) and has_failure
+    has_fix = "```" in text and bool(FIX_RE.search(lowered))
+    return (has_command and has_failure) or has_api or has_fix
 
 
-def should_analyze_file(turns: list[str]) -> bool:
-    text = "\n\n".join(turns).strip()
-    if not text:
-        return False
-    return should_analyze_chunk(text)
-
-
-def line_has_signal(line: str) -> bool:
-    lowered = line.lower()
-    if any(hint in lowered for hint in STRONG_CHUNK_HINTS):
-        return True
-    has_command = any(hint in lowered for hint in COMMAND_HINTS)
-    has_failure = any(hint in lowered for hint in FAILURE_HINTS)
-    has_api_issue = any(hint in lowered for hint in API_HINTS) and has_failure
-    has_code_fix = "```" in line and any(hint in lowered for hint in CODE_FIX_HINTS)
-    return (has_command and has_failure) or has_api_issue or has_code_fix
-
-
-def focus_chunk_text(chunk_text: str) -> str:
+def focus_chunk(chunk_text: str) -> str:
     lines = chunk_text.splitlines()
     if len(lines) <= 24:
         return chunk_text
-    keep_indexes: set[int] = set()
+    keep: set[int] = set()
     for index, line in enumerate(lines):
-        if not line_has_signal(line):
+        if not has_signal(line):
             continue
         for offset in (-2, -1, 0, 1, 2):
             target = index + offset
             if 0 <= target < len(lines):
-                keep_indexes.add(target)
-    if not keep_indexes:
-        return chunk_text
-    focused = "\n".join(lines[index] for index in sorted(keep_indexes)).strip()
-    return focused or chunk_text
+                keep.add(target)
+    return "\n".join(lines[index] for index in sorted(keep)).strip() if keep else chunk_text
 
 
-def truncate_for_prompt(text: str, limit_tokens: int = 1800) -> str:
-    encoding = get_encoding(MAP_MODEL)
+def truncate_for_prompt(text: str, encoding: Any, limit: int = 1600) -> str:
+    if encoding is None:
+        chars = limit * 4
+        return text if len(text) <= chars else text[: chars - 120] + "\n\n[...trimmed...]\n\n" + text[-400:]
     tokens = encoding.encode(text)
-    if len(tokens) <= limit_tokens:
+    if len(tokens) <= limit:
         return text
-    head = tokens[:1500]
-    tail = tokens[-300:]
-    return encoding.decode(head) + "\n\n[...trimmed...]\n\n" + encoding.decode(tail)
+    return encoding.decode(tokens[:1300]) + "\n\n[...trimmed...]\n\n" + encoding.decode(tokens[-300:])
 
 
-def merge_map_requests(chunk_texts: list[str], encoding: tiktoken.Encoding) -> list[tuple[str, str]]:
-    requests: list[tuple[str, str]] = []
-    current_labels: list[str] = []
-    current_parts: list[str] = []
+def merge_requests(chunk_texts: list[str], encoding: Any) -> list[tuple[str, str]]:
+    merged: list[tuple[str, str]] = []
+    labels: list[str] = []
+    parts: list[str] = []
     current_tokens = 0
 
     def flush() -> None:
-        nonlocal current_labels, current_parts, current_tokens
-        if not current_parts:
+        nonlocal labels, parts, current_tokens
+        if not parts:
             return
-        label = current_labels[0] if len(current_labels) == 1 else f"{current_labels[0]}-{current_labels[-1]}"
-        requests.append((label, "\n\n".join(current_parts).strip()))
-        current_labels = []
-        current_parts = []
+        label = labels[0] if len(labels) == 1 else f"{labels[0]}-{labels[-1]}"
+        merged.append((label, "\n\n".join(parts).strip()))
+        labels = []
+        parts = []
         current_tokens = 0
 
-    for chunk_index, chunk_text in enumerate(chunk_texts, 1):
-        if not should_analyze_chunk(chunk_text):
+    for index, chunk in enumerate(chunk_texts, 1):
+        if not has_signal(chunk):
             flush()
             continue
-        focused_text = focus_chunk_text(chunk_text)
-        chunk_tokens = token_count(focused_text, encoding)
-        if current_parts and current_tokens + chunk_tokens > MAP_REQUEST_MAX_TOKENS:
+        focused = focus_chunk(chunk)
+        size = token_count(focused, encoding)
+        if parts and current_tokens + size > MAP_REQUEST_MAX_TOKENS:
             flush()
-        current_labels.append(str(chunk_index))
-        current_parts.append(focused_text)
-        current_tokens += chunk_tokens
+        labels.append(str(index))
+        parts.append(focused)
+        current_tokens += size
     flush()
-    return requests
+    return merged
 
 
 def normalize_tag(tag: str) -> str:
-    cleaned = tag.strip()
-    if cleaned in ALLOWED_TAGS:
-        return cleaned
+    tag = tag.strip()
+    if tag in ALLOWED_TAGS:
+        return tag
     for allowed in TAG_ORDER:
-        if allowed in cleaned or cleaned in allowed:
+        if tag in allowed or allowed in tag:
             return allowed
     return "其他"
 
 
 def normalize_problem(problem: str) -> str:
     text = re.sub(r"\s+", "", problem.lower())
-    text = re.sub(r"[`~!@#$%^&*()_+=\[\]{}\\|;:'\",.<>/?，。！？；：“”‘’、·-]", "", text)
-    return text
+    return re.sub(r"[`~!@#$%^&*()_+=\[\]{}\\|;:'\",.<>/?，。！？；：“”‘’、·-]", "", text)
 
 
-def compact_rows(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+def compact_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     for row in rows:
-        tag = normalize_tag(str(row.get("tag", "其他")))
         problem = str(row.get("problem", "")).strip()
         solution = str(row.get("solution", "")).strip()
         error = str(row.get("error", "")).strip()
         if not problem or not solution:
             continue
+        tag = normalize_tag(str(row.get("tag", "其他")))
         key = (tag, normalize_problem(problem))
-        existing = grouped.get(key)
-        if existing is None:
-            grouped[key] = {
-                "problem": problem,
-                "error": error,
-                "solution": solution,
-                "tag": tag,
-                "count": int(row.get("count", 1) or 1),
-            }
+        current = grouped.get(key)
+        if current is None:
+            grouped[key] = {"problem": problem, "error": error, "solution": solution, "tag": tag, "count": int(row.get("count", 1) or 1)}
             continue
-        existing["count"] += int(row.get("count", 1) or 1)
-        if not existing["error"] and error:
-            existing["error"] = error
-        if len(solution) > len(existing["solution"]):
-            existing["solution"] = solution
-        if len(problem) > len(existing["problem"]):
-            existing["problem"] = problem
+        current["count"] += int(row.get("count", 1) or 1)
+        if not current["error"] and error:
+            current["error"] = error
+        if len(problem) > len(current["problem"]):
+            current["problem"] = problem
+        if len(solution) > len(current["solution"]):
+            current["solution"] = solution
     return list(grouped.values())
 
 
-def throttle_request() -> None:
-    global _NEXT_REQUEST_AT
-    with _REQUEST_LOCK:
-        now = time.monotonic()
-        wait_seconds = max(0.0, _NEXT_REQUEST_AT - now)
-        if wait_seconds > 0:
-            time.sleep(wait_seconds)
-            now = time.monotonic()
-        _NEXT_REQUEST_AT = now + API_CALL_MIN_INTERVAL_SECONDS
+def api_json(api_key: str, method: str, path: str, payload: dict[str, Any] | None = None, timeout: int = 600) -> dict[str, Any]:
+    data = None
+    headers = {"Authorization": f"Bearer {api_key}"}
+    if payload is not None:
+        data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(OPENAI_BASE_URL + path, data=data, headers=headers, method=method)
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        text = response.read().decode("utf-8")
+    return json.loads(text) if text else {}
 
 
-def chat_json(
-    client: OpenAI,
-    model: str,
-    system_prompt: str,
-    user_prompt: str,
-    context_label: str,
-    max_tokens: int,
-) -> dict[str, Any]:
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
-    kwargs = {
-        "model": model,
-        "messages": messages,
-        "temperature": 0,
-        "max_tokens": max_tokens,
-    }
-
-    def is_rate_limited(error: Exception) -> bool:
-        return getattr(error, "status_code", None) == 429 or "429" in str(error)
-
-    rate_limit_attempts = 0
-    while True:
-        try:
-            throttle_request()
-            try:
-                response = client.chat.completions.create(
-                    **kwargs,
-                    response_format={"type": "json_object"},
-                )
-            except Exception as error:
-                if is_rate_limited(error):
-                    time.sleep(min(180, 30 * (2 ** rate_limit_attempts)))
-                    rate_limit_attempts += 1
-                    continue
-                throttle_request()
-                response = client.chat.completions.create(**kwargs)
-
-            content = response.choices[0].message.content or "{}"
-            try:
-                payload = load_json_payload(content)
-            except json.JSONDecodeError as exc:
-                preview = strip_code_fences(content)[:400].replace("\n", "\\n")
-                log_error(f"{context_label}: JSON 解析失败: {exc}; preview={preview}")
-                return {"items": []}
-            if isinstance(payload, list):
-                return {"items": payload}
-            if isinstance(payload, dict):
-                return payload
-            return {"items": []}
-        except Exception as error:
-            if is_rate_limited(error):
-                time.sleep(min(180, 30 * (2 ** rate_limit_attempts)))
-                rate_limit_attempts += 1
-                continue
-            raise
+def api_text(api_key: str, path: str, timeout: int = 600) -> str:
+    request = urllib.request.Request(OPENAI_BASE_URL + path, headers={"Authorization": f"Bearer {api_key}"}, method="GET")
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.read().decode("utf-8")
 
 
-def map_chunk(
-    client: OpenAI,
-    file_path: Path,
-    chunk_index: str,
-    chunk_total: int,
-    chunk_text: str,
-) -> list[dict[str, Any]]:
-    prompt_text = truncate_for_prompt(chunk_text)
-    system_prompt = (
-        "你是资深编程问题整理助手。"
-        "只提取真实的编程、调试、构建、依赖、API 或环境问题。"
-        "问题和解法都要短。不要编造，不要输出解释文字，只输出 JSON。"
+def read_remote_text(api_key: str, value: str, timeout: int = 600) -> str:
+    if value.startswith("http://") or value.startswith("https://"):
+        request = urllib.request.Request(value, method="GET")
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read().decode("utf-8")
+    return api_text(api_key, f"/files/{value}/content", timeout=timeout)
+
+
+def upload_batch_file(api_key: str, path: Path) -> dict[str, Any]:
+    boundary = f"----codex{int(time.time() * 1000)}"
+    body = b"".join(
+        [
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"purpose\"\r\n\r\nbatch\r\n".encode(),
+            (
+                f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{path.name}\"\r\n"
+                "Content-Type: application/jsonl\r\n\r\n"
+            ).encode()
+            + path.read_bytes()
+            + b"\r\n",
+            f"--{boundary}--\r\n".encode(),
+        ]
     )
-    user_prompt = json.dumps(
-        {
-            "task": "提取对话里的编程问题和解法，没有就返回空 items。",
-            "file": str(file_path),
-            "chunk": f"{chunk_index}/{chunk_total}",
-            "tags": TAG_ORDER,
-            "schema": {"items": [{"problem": "string", "error": "string", "solution": "string", "tag": "string"}]},
-            "rules": [
-                "problem 不超过30字",
-                "solution 不超过40字",
-                "tag 只能从 tags 中选一个",
-            ],
-            "text": prompt_text,
-        },
-        ensure_ascii=False,
-        separators=(",", ":"),
+    request = urllib.request.Request(
+        OPENAI_BASE_URL + "/files",
+        data=body,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
     )
-    payload = chat_json(
-        client,
-        MAP_MODEL,
-        system_prompt,
-        user_prompt,
-        context_label=f"{file_path} chunk {chunk_index}/{chunk_total}",
-        max_tokens=MAP_MAX_TOKENS,
-    )
-    items = payload.get("items", [])
-    if not isinstance(items, list):
+    with urllib.request.urlopen(request, timeout=600) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def unwrap_data(payload: dict[str, Any]) -> dict[str, Any]:
+    data = payload.get("data")
+    return data if isinstance(data, dict) else payload
+
+
+def parse_chat_content(body: dict[str, Any]) -> str:
+    choices = body.get("choices", [])
+    if not isinstance(choices, list) or not choices:
+        return ""
+    message = choices[0].get("message", {})
+    return flatten_text(message.get("content")) if isinstance(message, dict) else ""
+
+
+def rows_from_payload(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, dict):
+        payload = payload.get("items", [])
+    if not isinstance(payload, list):
         return []
     rows: list[dict[str, Any]] = []
-    for item in items:
+    for item in payload:
         if not isinstance(item, dict):
             continue
         rows.append(
@@ -662,73 +456,75 @@ def map_chunk(
     return compact_rows(rows)
 
 
-def reduce_group(
-    client: OpenAI,
-    tag: str,
-    rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    if not rows:
-        return []
-    system_prompt = (
-        "你是编程知识库整理助手。"
-        "你的任务是只合并明显同义的重复问题，保留不同问题的多样性。"
-        "只输出 JSON。"
-    )
-    user_prompt = json.dumps(
-        {
-            "tag": tag,
-            "task": "只合并明显重复的问题，不要把不同问题合并掉。",
-            "schema": {"items": [{"problem": "string", "error": "string", "solution": "string", "tag": "string"}]},
-            "rules": [
-                "保留不同问题，不要过度归并",
-                "至少保留 8 条或输入条数的一半，取较小值",
-                "problem 和 solution 保持简短可执行",
-            ],
-            "rows": rows,
-        },
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
+def throttle_reduce() -> None:
+    global _NEXT_REDUCE_AT
+    now = time.monotonic()
+    wait_seconds = max(0.0, _NEXT_REDUCE_AT - now)
+    if wait_seconds > 0:
+        time.sleep(wait_seconds)
+        now = time.monotonic()
+    _NEXT_REDUCE_AT = now + REDUCE_REQUEST_INTERVAL_SECONDS
+
+
+def chat_json(api_key: str, model: str, system_prompt: str, user_prompt: str, context: str, max_tokens: int) -> dict[str, Any]:
+    payload = {
+        "model": model,
+        "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+        "temperature": 0,
+        "max_tokens": max_tokens,
+        "response_format": {"type": "json_object"},
+    }
+    attempts = 0
+    while True:
+        try:
+            throttle_reduce()
+            response = api_json(api_key, "POST", "/chat/completions", payload)
+            return load_json_payload(parse_chat_content(response) or "{}")
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            if error.code == 429:
+                wait_seconds = min(180, 30 * (2**attempts))
+                attempts += 1
+                log_error(f"{context}: reduce 429 wait={wait_seconds} body={body[:300]}")
+                time.sleep(wait_seconds)
+                continue
+            log_error(f"{context}: HTTP {error.code}: {body[:300]}")
+            raise
+        except json.JSONDecodeError as exc:
+            log_error(f"{context}: JSON 解析失败: {exc}")
+            return {"items": []}
+
+
+def reduce_group(api_key: str, tag: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     payload = chat_json(
-        client,
+        api_key,
         REDUCE_MODEL,
-        system_prompt,
-        user_prompt,
-        context_label=f"reduce:{tag}",
-        max_tokens=REDUCE_MAX_TOKENS,
-    )
-    items = payload.get("items", [])
-    if not isinstance(items, list):
-        return []
-    merged: list[dict[str, Any]] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        merged.append(
+        "你是编程知识库整理助手。只合并明显同义的重复问题，保留不同问题，只输出 JSON。",
+        json.dumps(
             {
-                "problem": str(item.get("problem", "")).strip(),
-                "error": str(item.get("error", "")).strip(),
-                "solution": str(item.get("solution", "")).strip(),
-                "tag": normalize_tag(str(item.get("tag", tag))),
-                "count": 1,
-            }
-        )
-    return compact_rows(merged)
+                "tag": tag,
+                "task": "只合并明显重复的问题，不要过度归并。",
+                "schema": {"items": [{"problem": "string", "error": "string", "solution": "string", "tag": "string"}]},
+                "rules": ["至少保留 8 条或输入条数的一半，取较小值", "problem 和 solution 保持简短可执行"],
+                "rows": rows,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+        f"reduce:{tag}",
+        REDUCE_MAX_TOKENS,
+    )
+    return rows_from_payload(payload)
 
 
-def batch_rows(rows: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
-    return [rows[index : index + size] for index in range(0, len(rows), size)]
-
-
-def reduce_with_batches(client: OpenAI, tag: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def reduce_rows(api_key: str, tag: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     current = compact_rows(rows)
     if len(current) <= REDUCE_BATCH_SIZE:
-        return reduce_group(client, tag, current)
-
-    next_round: list[dict[str, Any]] = []
-    for batch in batch_rows(current, REDUCE_BATCH_SIZE):
-        next_round.extend(reduce_group(client, tag, batch))
-    return compact_rows(next_round)
+        return reduce_group(api_key, tag, current)
+    merged: list[dict[str, Any]] = []
+    for index in range(0, len(current), REDUCE_BATCH_SIZE):
+        merged.extend(reduce_group(api_key, tag, current[index : index + REDUCE_BATCH_SIZE]))
+    return compact_rows(merged)
 
 
 def render_markdown(rows_by_tag: dict[str, list[dict[str, Any]]]) -> str:
@@ -737,15 +533,13 @@ def render_markdown(rows_by_tag: dict[str, list[dict[str, Any]]]) -> str:
         rows = rows_by_tag.get(tag, [])
         if not rows:
             continue
-        lines.append(f"## {tag}")
-        lines.append("| 问题 | 解法 |")
-        lines.append("|---|---|")
+        lines.extend([f"## {tag}", "| 问题 | 解法 |", "|---|---|"])
         for row in rows:
             problem = row["problem"].replace("|", "\\|").replace("\n", "<br>")
             solution = row["solution"].replace("|", "\\|").replace("\n", "<br>")
             lines.append(f"| {problem} | {solution} |")
         lines.append("")
-    return "\n".join(lines).strip() + "\n"
+    return ("\n".join(lines).strip() + "\n") if lines else ""
 
 
 def collect_jsonl_files() -> list[Path]:
@@ -756,7 +550,7 @@ def collect_jsonl_files() -> list[Path]:
     return files
 
 
-def fingerprint_file(path: Path) -> dict[str, Any]:
+def fingerprint(path: Path) -> dict[str, Any]:
     stat = path.stat()
     return {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
 
@@ -775,134 +569,281 @@ def load_state() -> dict[str, dict[str, Any]]:
             except json.JSONDecodeError as exc:
                 log_error(f"{STATE_FILE} line {line_no}: JSON 解析失败: {exc}")
                 continue
-            if not isinstance(entry, dict):
-                continue
-            file_path = str(entry.get("file", "")).strip()
-            if file_path:
-                state[file_path] = entry
+            if isinstance(entry, dict) and entry.get("file"):
+                state[str(entry["file"])] = entry
     return state
 
 
 def append_state(entry: dict[str, Any]) -> None:
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with STATE_FILE.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
-def load_cached_rows(files: list[Path]) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+def cached_rows(files: list[Path]) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
     state = load_state()
-    extracted: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for path in files:
-        cached = state.get(str(path))
-        if not cached:
-            continue
-        if cached.get("fingerprint") != fingerprint_file(path):
-            continue
-        rows = cached.get("rows", [])
-        if isinstance(rows, list):
-            extracted.extend(row for row in rows if isinstance(row, dict))
-    return state, extracted
+        entry = state.get(str(path))
+        if entry and entry.get("fingerprint") == fingerprint(path):
+            rows.extend(row for row in entry.get("rows", []) if isinstance(row, dict))
+    return state, rows
 
 
-def process_one_file(api_key: str, encoding: tiktoken.Encoding, path: Path) -> tuple[Path, int, int, list[dict[str, Any]], int]:
-    client = make_client_from_key(api_key)
-    turns = parse_turns(path)
-    if not should_analyze_file(turns):
-        return path, 0, 0, [], len(turns)
-    chunk_texts = chunk_turns(turns, encoding)
-    analyzable = merge_map_requests(chunk_texts, encoding)
-    file_rows: list[dict[str, Any]] = []
-    request_total = len(analyzable)
-    for chunk_index, chunk_text in analyzable:
-        file_rows.extend(map_chunk(client, path, chunk_index, request_total, chunk_text))
-    return path, len(chunk_texts), len(analyzable), compact_rows(file_rows), len(turns)
+def request_id(path: Path, file_fingerprint: dict[str, Any], chunk_label: str) -> str:
+    raw = f"{path}|{file_fingerprint['size']}|{file_fingerprint['mtime_ns']}|{chunk_label}"
+    return "map-" + hashlib.sha1(raw.encode()).hexdigest()
 
 
-def process_files(api_key: str, encoding: tiktoken.Encoding, files: list[Path], workers: int) -> list[dict[str, Any]]:
-    _ = workers
-    state, extracted = load_cached_rows(files)
+def write_batch_meta(meta: dict[str, Any]) -> None:
+    BATCH_META_FILE.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def load_batch_meta() -> dict[str, Any] | None:
+    if not BATCH_META_FILE.exists():
+        return None
+    return json.loads(BATCH_META_FILE.read_text(encoding="utf-8"))
+
+
+def clear_batch_files() -> None:
+    for path in (BATCH_META_FILE, BATCH_INPUT_FILE, BATCH_OUTPUT_FILE, BATCH_ERROR_FILE):
+        if path.exists():
+            path.unlink()
+
+
+def map_request_body(file_path: Path, chunk_label: str, chunk_total: int, chunk_text: str, encoding: Any) -> dict[str, Any]:
+    prompt = truncate_for_prompt(chunk_text, encoding)
+    return {
+        "model": MAP_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": "你是资深编程问题整理助手。只提取真实的编程、调试、构建、依赖、API 或环境问题。没有问题就返回空 items。只输出 JSON。",
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "task": "提取对话里的编程问题和解法，没有就返回空 items。",
+                        "file": str(file_path),
+                        "chunk": f"{chunk_label}/{chunk_total}",
+                        "tags": TAG_ORDER,
+                        "schema": {"items": [{"problem": "string", "error": "string", "solution": "string", "tag": "string"}]},
+                        "rules": ["problem 不超过26字", "solution 不超过34字", "error 为空或不超过40字", "tag 只能从 tags 中选一个"],
+                        "text": prompt,
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            },
+        ],
+        "temperature": 0,
+        "max_tokens": MAP_MAX_TOKENS,
+        "response_format": {"type": "json_object"},
+    }
+
+
+def prepare_batch_requests(files: list[Path], state: dict[str, dict[str, Any]], encoding: Any) -> tuple[list[str], dict[str, Any]]:
+    requests: list[str] = []
+    meta_files: dict[str, Any] = {}
     total = len(files)
     for index, path in enumerate(files, 1):
+        file_fingerprint = fingerprint(path)
         cached = state.get(str(path))
+        if cached and cached.get("fingerprint") == file_fingerprint:
+            print(f"[{index}/{total}] {path} cached extracted={len(cached.get('rows', []))}", flush=True)
+            continue
         try:
-            fingerprint = fingerprint_file(path)
-            if cached and cached.get("fingerprint") == fingerprint:
-                cached_rows = cached.get("rows", [])
-                cached_turns = int(cached.get("turn_count", 0) or 0)
-                cached_chunks = int(cached.get("chunk_count", 0) or 0)
-                cached_analyzable = int(cached.get("analyzable_chunks", 0) or 0)
-                print(
-                    f"[{index}/{total}] {path} cached turns={cached_turns} chunks={cached_chunks} analyzable={cached_analyzable} extracted={len(cached_rows)}",
-                    flush=True,
-                )
+            turns = parse_turns(path)
+            if not turns or not has_signal("\n\n".join(turns)):
+                entry = {"file": str(path), "fingerprint": file_fingerprint, "turn_count": len(turns), "chunk_count": 0, "analyzable_chunks": 0, "rows": [], "processed_at": now_text()}
+                append_state(entry)
+                state[str(path)] = entry
+                print(f"[{index}/{total}] {path} extracted=0", flush=True)
                 continue
-
-            file_path, chunk_count, analyzable_count, file_rows, turn_count = process_one_file(api_key, encoding, path)
-            extracted.extend(file_rows)
-            entry = {
-                "file": str(file_path),
-                "fingerprint": fingerprint,
-                "turn_count": turn_count,
-                "chunk_count": chunk_count,
-                "analyzable_chunks": analyzable_count,
-                "rows": file_rows,
-                "processed_at": now_text(),
+            chunks = chunk_turns(turns, encoding)
+            merged = merge_requests(chunks, encoding)
+            if not merged:
+                entry = {"file": str(path), "fingerprint": file_fingerprint, "turn_count": len(turns), "chunk_count": len(chunks), "analyzable_chunks": 0, "rows": [], "processed_at": now_text()}
+                append_state(entry)
+                state[str(path)] = entry
+                print(f"[{index}/{total}] {path} chunks={len(chunks)} analyzable=0 extracted=0", flush=True)
+                continue
+            request_ids: list[str] = []
+            for chunk_label, chunk_text in merged:
+                custom_id = request_id(path, file_fingerprint, chunk_label)
+                requests.append(
+                    json.dumps(
+                        {
+                            "custom_id": custom_id,
+                            "method": "POST",
+                            "url": "/v1/chat/completions",
+                            "body": map_request_body(path, chunk_label, len(merged), chunk_text, encoding),
+                        },
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                )
+                request_ids.append(custom_id)
+            meta_files[str(path)] = {
+                "fingerprint": file_fingerprint,
+                "turn_count": len(turns),
+                "chunk_count": len(chunks),
+                "analyzable_chunks": len(merged),
+                "request_ids": request_ids,
             }
-            append_state(entry)
-            state[str(file_path)] = entry
-            print(
-                f"[{index}/{total}] {file_path} turns={turn_count} chunks={chunk_count} analyzable={analyzable_count} extracted={len(file_rows)}",
-                flush=True,
-            )
+            print(f"[{index}/{total}] {path} prepared analyzable={len(merged)}", flush=True)
         except Exception as exc:
             log_error(f"{path}: {exc}\n{traceback.format_exc()}")
             print(f"[{index}/{total}] {path} skipped: {exc}", flush=True)
-    return extracted
+    return requests, {"files": meta_files}
 
 
-def build_summary(client: OpenAI, rows: list[dict[str, Any]]) -> str:
+def submit_batch(api_key: str, requests: list[str], meta: dict[str, Any]) -> dict[str, Any]:
+    if not requests:
+        return meta
+    BATCH_INPUT_FILE.write_text("\n".join(requests) + "\n", encoding="utf-8")
+    uploaded = unwrap_data(upload_batch_file(api_key, BATCH_INPUT_FILE))
+    input_file_id = str(uploaded.get("id", "")).strip()
+    if not input_file_id:
+        raise RuntimeError(f"upload batch input failed: {uploaded}")
+    batch = api_json(api_key, "POST", "/batches", {"input_file_id": input_file_id, "endpoint": "/v1/chat/completions", "completion_window": "24h"})
+    batch_id = str(batch.get("id", "")).strip()
+    if not batch_id:
+        raise RuntimeError(f"create batch failed: {batch}")
+    meta.update({"batch_id": batch_id, "input_file_id": input_file_id, "request_count": len(requests), "submitted_at": now_text()})
+    write_batch_meta(meta)
+    print(f"batch_submitted id={batch_id} requests={len(requests)}", flush=True)
+    return meta
+
+
+def wait_batch(api_key: str, batch_id: str) -> dict[str, Any]:
+    last_status = ""
+    while True:
+        batch = api_json(api_key, "GET", f"/batches/{batch_id}")
+        status = str(batch.get("status", "")).strip()
+        if status != last_status:
+            print(f"batch_status id={batch_id} status={status}", flush=True)
+            last_status = status
+        if status == "completed":
+            return batch
+        if status in {"failed", "expired", "cancelled"}:
+            raise RuntimeError(f"batch {batch_id} ended status={status}: {json.dumps(batch, ensure_ascii=False)}")
+        time.sleep(BATCH_POLL_INTERVAL_SECONDS)
+
+
+def load_batch_results(api_key: str, file_id: str | None, target: Path) -> dict[str, list[dict[str, Any]]]:
+    if not file_id:
+        return {}
+    content = read_remote_text(api_key, str(file_id))
+    target.write_text(content, encoding="utf-8")
+    results: dict[str, list[dict[str, Any]]] = {}
+    for line_no, line in enumerate(content.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            entry = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            log_error(f"{target} line {line_no}: JSON 解析失败: {exc}")
+            continue
+        custom_id = str(entry.get("custom_id", "")).strip()
+        if not custom_id:
+            continue
+        response = entry.get("response")
+        if not isinstance(response, dict):
+            if entry.get("error"):
+                log_error(f"{custom_id}: batch error={json.dumps(entry.get('error'), ensure_ascii=False)}")
+            continue
+        status_code = int(response.get("status_code") or 200)
+        body = response.get("body", {})
+        if status_code >= 400:
+            log_error(f"{custom_id}: batch status={status_code} body={json.dumps(body, ensure_ascii=False)[:300]}")
+            results[custom_id] = []
+            continue
+        try:
+            payload = load_json_payload(parse_chat_content(body if isinstance(body, dict) else {}) or "{}")
+        except json.JSONDecodeError as exc:
+            log_error(f"{custom_id}: JSON 解析失败: {exc}")
+            results[custom_id] = []
+            continue
+        results[custom_id] = rows_from_payload(payload)
+    return results
+
+
+def apply_batch(files: list[Path], state: dict[str, dict[str, Any]], api_key: str, meta: dict[str, Any], batch: dict[str, Any]) -> list[dict[str, Any]]:
+    outputs = load_batch_results(api_key, batch.get("output_file_id"), BATCH_OUTPUT_FILE)
+    _ = load_batch_results(api_key, batch.get("error_file_id"), BATCH_ERROR_FILE)
+    file_indexes = {str(path): index for index, path in enumerate(files, 1)}
+    total = len(files)
+    for file_path, file_meta in meta.get("files", {}).items():
+        rows: list[dict[str, Any]] = []
+        for custom_id in file_meta.get("request_ids", []):
+            rows.extend(outputs.get(custom_id, []))
+            if custom_id not in outputs:
+                log_error(f"{custom_id}: batch missing output row")
+        entry = {
+            "file": file_path,
+            "fingerprint": file_meta["fingerprint"],
+            "turn_count": int(file_meta.get("turn_count", 0) or 0),
+            "chunk_count": int(file_meta.get("chunk_count", 0) or 0),
+            "analyzable_chunks": int(file_meta.get("analyzable_chunks", 0) or 0),
+            "rows": compact_rows(rows),
+            "processed_at": now_text(),
+        }
+        append_state(entry)
+        state[file_path] = entry
+        print(f"[{file_indexes.get(file_path, '?')}/{total}] {file_path} extracted={len(entry['rows'])}", flush=True)
+    clear_batch_files()
+    return cached_rows(files)[1]
+
+
+def process_files(api_key: str, files: list[Path], encoding: Any) -> list[dict[str, Any]]:
+    state, rows = cached_rows(files)
+    while True:
+        meta = load_batch_meta()
+        if meta:
+            batch = wait_batch(api_key, str(meta["batch_id"]))
+            rows = apply_batch(files, state, api_key, meta, batch)
+            state, rows = cached_rows(files)
+            continue
+        requests, meta = prepare_batch_requests(files, state, encoding)
+        if not requests:
+            return rows
+        meta = submit_batch(api_key, requests, meta)
+        batch = wait_batch(api_key, str(meta["batch_id"]))
+        rows = apply_batch(files, state, api_key, meta, batch)
+        return rows
+
+
+def build_summary(api_key: str, rows: list[dict[str, Any]]) -> str:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in compact_rows(rows):
         grouped[normalize_tag(str(row.get("tag", "其他")))].append(row)
-
-    reduced_by_tag: dict[str, list[dict[str, Any]]] = {}
+    reduced: dict[str, list[dict[str, Any]]] = {}
     for tag in TAG_ORDER:
         if tag not in grouped:
             continue
-        reduced_rows = reduce_with_batches(client, tag, grouped[tag])
-        reduced_by_tag[tag] = sorted(
-            compact_rows(reduced_rows),
-            key=lambda item: (-int(item.get("count", 1) or 1), item["problem"]),
-        )
-    return render_markdown(reduced_by_tag)
+        reduced[tag] = sorted(reduce_rows(api_key, tag, grouped[tag]), key=lambda row: (-int(row.get("count", 1) or 1), row["problem"]))
+    return render_markdown(reduced)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="批量提取 Codex 对话中的编程问题与解法。")
-    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
+    parser.add_argument("--workers", type=int, default=1)
     args = parser.parse_args()
-
-    api_key, api_source = require_api_key()
-    client = make_client_from_key(api_key)
-    encoding = get_encoding(MAP_MODEL)
+    api_key, source = require_api_key()
     files = collect_jsonl_files()
-    workers = 1
+    encoding = get_encoding()
     if args.workers != 1:
         print(f"workers_forced=1 requested={args.workers}", flush=True)
-    print(
-        f"input_files={len(files)} api_key_source={api_source} model={MAP_MODEL} workers={workers} state_file={STATE_FILE.name}",
-        flush=True,
-    )
-
+    print(f"input_files={len(files)} api_key_source={source} model={MAP_MODEL} workers=1 state_file={STATE_FILE.name}", flush=True)
     if not files:
         OUTPUT_FILE.write_text("", encoding="utf-8")
         print(f"written={OUTPUT_FILE} (no input files found)", flush=True)
         return 0
-
-    extracted = process_files(api_key, encoding, files, workers)
-    summary = build_summary(client, extracted)
-    OUTPUT_FILE.write_text(summary, encoding="utf-8")
-    print(f"written={OUTPUT_FILE} rows={len(extracted)}", flush=True)
+    rows = process_files(api_key, files, encoding)
+    OUTPUT_FILE.write_text(build_summary(api_key, rows), encoding="utf-8")
+    print(f"written={OUTPUT_FILE} rows={len(rows)}", flush=True)
     return 0
 
 
