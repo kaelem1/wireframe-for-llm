@@ -1,1 +1,1 @@
-readme.md 已改成简短项目说明，保留用途、核心能力与开发命令；待提交远程仓库。
+项目已迁到 `/Users/kaelem/dev/wireframe-for-llm`，远程仓库根已改正；本地独立仓库当前分支为 `wireframe-for-llm`。
