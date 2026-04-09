@@ -4,7 +4,7 @@
 2. 当前包含项目导出扩展、双语命名辅助、fit 缩放与放置/命名辅助
 3. 组件归一化仅做最小尺寸约束，不再锁死边界位置或尺寸
 4. 组件复制支持可控偏移，供粘贴与 Option 拖拽复用
-5. 导出 JSON 会为越界组件补 clipped，并写入固定 _instructions；组件描述会映射为 info
+5. 导出 JSON 会为越界组件补 clipped，并写入 clipped/手绘容差/禁 emoji 三类 _instructions；组件描述会映射为 info
 6. 组件命名支持最小防重逻辑
 7. 更新后检查所属 `.folder.md`
 */
@@ -113,6 +113,9 @@ export function exportProjectJson(project: ProjectData) {
     _instructions: {
       clipped:
         '如果一个组件的 clipped 为 true，说明它被画板边界截断了，其真实高度未知。还原时请参考同类型、同名称的其他组件高度，保持一致。',
+      layoutTolerance:
+        '手绘线框重在结构与交互，位置尺寸仅供参考，不必严格对齐。',
+      noEmoji: '输出界面不得包含任何 emoji 符号。',
     },
     instruction: EXPORT_INSTRUCTION,
     boards: project.boards.map<ExportBoard>((board) => ({

@@ -2,7 +2,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示、通用块创建、组件选中态强化、组件越界编辑与 clipped 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
+2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
 3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置与拖动一次性 undo 的回归
 4. 更新后检查所属 `.folder.md`
 */
@@ -940,7 +940,7 @@ describe('BoardCanvas', () => {
     expect(new Set(names).size).toBe(names.length)
   })
 
-  it('marks clipped components in exported JSON and adds top-level instructions', () => {
+  it('marks clipped components in exported JSON and adds export notes', () => {
     const project = createProject('Test Project', 'Desktop')
     const board = project.boards[0]
     const inside = createComponent('Button', board, project.boardSize, { x: 48, y: 64 })
@@ -955,7 +955,8 @@ describe('BoardCanvas', () => {
     useAppStore.getState().replaceProject(project)
 
     const exported = JSON.parse(useAppStore.getState().exportProjectJson()) as {
-      _instructions?: { clipped?: string }
+      _instructions?: { clipped?: string; layoutTolerance?: string; noEmoji?: string }
+      instruction?: string
       boards: Array<{ components: Array<{ name: string; clipped?: boolean }> }>
     }
     const exportedComponents = exported.boards[0]?.components ?? []
@@ -963,6 +964,12 @@ describe('BoardCanvas', () => {
     expect(exported._instructions?.clipped).toBe(
       '如果一个组件的 clipped 为 true，说明它被画板边界截断了，其真实高度未知。还原时请参考同类型、同名称的其他组件高度，保持一致。',
     )
+    expect(exported._instructions?.layoutTolerance).toBe(
+      '手绘线框重在结构与交互，位置尺寸仅供参考，不必严格对齐。',
+    )
+    expect(exported._instructions?.noEmoji).toBe('输出界面不得包含任何 emoji 符号。')
+    expect(exported.instruction).toContain('prioritize structure and interaction')
+    expect(exported.instruction).toContain('do not use emoji')
     expect(exportedComponents.find((component) => component.name === 'Inside')).not.toHaveProperty('clipped')
     expect(exportedComponents.find((component) => component.name === 'Clipped')?.clipped).toBe(true)
   })

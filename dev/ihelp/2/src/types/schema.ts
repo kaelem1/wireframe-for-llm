@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前同时承接 source 小写组件目录、浏览器派生 locale 与现有旧组件类型，并收敛为单一 wireframe 工作态
-3. 当前补入 genericBlock 组件类型，并为导出结构补充 clipped/_instructions；组件内部可存 description，导出时映射为 info
+3. 当前补入 genericBlock 组件类型，并为导出结构补充 clipped 及 clipped/手绘容差/禁 emoji 三类 _instructions；组件内部可存 description，导出时映射为 info
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -172,6 +172,8 @@ export interface ExportBoard extends Omit<Board, 'components'> {
 export interface ExportProjectData extends Omit<ProjectData, 'boards'> {
   _instructions: {
     clipped: string
+    layoutTolerance: string
+    noEmoji: string
   }
   instruction: string
   boards: ExportBoard[]
