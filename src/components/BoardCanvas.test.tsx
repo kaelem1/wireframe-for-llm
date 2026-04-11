@@ -2,8 +2,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
-3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast 与拖动一次性 undo 的回归
+2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
+3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub 跳转与拖动一次性 undo 的回归
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -222,7 +222,7 @@ describe('BoardCanvas', () => {
     expect(screen.queryByText('Pick a component and click or drag on canvas.')).toBeNull()
   })
 
-  it('renders export and copy buttons at the top of the right sidebar and keeps export working', async () => {
+  it('renders export, copy, and GitHub buttons in the action row and keeps actions working', async () => {
     const project = createProject('Test Project', 'Desktop')
     useAppStore.getState().replaceProject(project)
 
@@ -230,6 +230,7 @@ describe('BoardCanvas', () => {
     const revokeObjectURLMock = vi.fn()
     const anchorClickMock = vi.fn()
     const writeTextMock = vi.fn().mockResolvedValue(undefined)
+    const openMock = vi.fn()
     vi.stubGlobal('URL', {
       createObjectURL: createObjectURLMock,
       revokeObjectURL: revokeObjectURLMock,
@@ -237,6 +238,10 @@ describe('BoardCanvas', () => {
     Object.defineProperty(window.navigator, 'clipboard', {
       configurable: true,
       value: { writeText: writeTextMock },
+    })
+    Object.defineProperty(window, 'open', {
+      configurable: true,
+      value: openMock,
     })
     vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
       const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName)
@@ -249,25 +254,28 @@ describe('BoardCanvas', () => {
       return element
     }) as typeof document.createElement)
 
-    const { container } = render(<App />)
+    const { container } = render(<InteractionPanel />)
     const exportButton = screen.getByRole('button', { name: 'Export JSON' })
     const copyButton = screen.getByRole('button', { name: 'Copy JSON' })
-    const rightSidebar = container.querySelector('.workspace__sidebar--right')
+    const githubButton = screen.getByRole('button', { name: 'GitHub' })
     const buttonGroup = container.querySelector('.panel__export-actions')
     const exportRule = appStyles.match(/\.panel__export-button\s*\{[^}]*\}/)?.[0] ?? ''
     const copyRule = appStyles.match(/\.panel__copy-button\s*\{[^}]*\}/)?.[0] ?? ''
     const exportPrimaryRule = appStyles.match(/\.panel__export-button--primary\s*\{[^}]*\}/)?.[0] ?? ''
+    const githubRule = appStyles.match(/\.panel__github-button\s*\{[^}]*\}/)?.[0] ?? ''
 
-    expect(rightSidebar?.firstElementChild?.contains(exportButton)).toBe(true)
-    expect(rightSidebar?.firstElementChild?.contains(copyButton)).toBe(true)
     expect(buttonGroup).not.toBeNull()
+    expect(buttonGroup?.children).toHaveLength(3)
+    expect(buttonGroup?.children[0]).toBe(exportButton)
+    expect(buttonGroup?.children[1]).toBe(copyButton)
+    expect(buttonGroup?.children[2]).toBe(githubButton)
     expect(exportButton.className).toContain('panel__export-button--primary')
     expect(exportRule).toContain('flex: 2;')
     expect(copyRule).toContain('flex: 1;')
+    expect(githubRule).toContain('flex: 0 0 72px;')
+    expect(githubButton.textContent).toBe('GH')
     expect(exportPrimaryRule).toContain('background: #5a3e31;')
     expect(exportPrimaryRule).toContain('color: #fff;')
-    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
-    expect(container.querySelector('.preview-overlay')).toBeNull()
 
     fireEvent.click(copyButton)
 
@@ -278,6 +286,14 @@ describe('BoardCanvas', () => {
     expect(createObjectURLMock).toHaveBeenCalled()
     expect(anchorClickMock).toHaveBeenCalled()
     expect(revokeObjectURLMock).toHaveBeenCalled()
+
+    fireEvent.click(githubButton)
+
+    expect(openMock).toHaveBeenCalledWith(
+      'https://github.com/kaelem1/wireframe-for-llm',
+      '_blank',
+      'noopener,noreferrer',
+    )
   })
 
   it('shows a success toast after copy json succeeds', async () => {

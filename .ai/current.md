@@ -1,1 +1,1 @@
-已在隔离 worktree 完成 build 修复并复验通过：`tsconfig.app.json` 排除测试和旧 `PreviewOverlay.tsx`，`storage.ts` 补 browser locale。
+已保留远端 build 修复；右栏顶部新增 GH 按钮，点击后新开仓库链接；已补定向测试，待 rebase 完成后复验构建。
