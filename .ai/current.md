@@ -1,1 +1,1 @@
-项目已迁到 `/Users/kaelem/dev/wireframe-for-llm`，远程仓库根已改正；本地独立仓库当前分支为 `wireframe-for-llm`。
+已补上复制 JSON 成功 toast；右栏复制成功后在底部短暂显示“复制成功”，相关回归与构建已通过。
