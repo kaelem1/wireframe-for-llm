@@ -7,3 +7,4 @@
 组件内部 `description` 仅作编辑态字段，导出 JSON 统一映射为 `info`；右栏属性下拉只做原位切换 `type`，不新建区块。
 手绘线框导出与 AI 还原都以结构、信息架构、交互为先，坐标尺寸只作近似参考；输出界面禁止 emoji。
 仓库根固定为当前项目目录，不再挂在父级 `dev` 树下；本地工作分支固定为 `wireframe-for-llm`。
+生产构建的 `tsconfig.app.json` 排除 `*.test.*`，测试文件保留在 `src/` 但不进入 Vercel build。

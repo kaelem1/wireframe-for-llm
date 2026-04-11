@@ -1,11 +1,12 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前按单一 workspace + wireframe purpose 写入 localStorage
+2. 当前按单一 workspace + wireframe purpose 写入 localStorage，locale 改走浏览器检测
 3. 更新后检查所属 `.folder.md`
 */
 
 import { LOCAL_STORAGE_KEY } from './constants'
+import { detectBrowserLocale } from './i18n'
 import { parseProjectJson } from './project'
 import type {
   PersistedState,
@@ -54,6 +55,7 @@ const normalizeSnapshot = (value: unknown): WorkspaceSnapshot | null => {
     settings,
     activeBoardId: currentBoardId,
     wireframe: normalizeWireframeState(record.wireframe),
+    locale: detectBrowserLocale(),
   }
 }
 

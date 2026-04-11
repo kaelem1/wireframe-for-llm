@@ -1,8 +1,10 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前补齐了参考仓 wireframe 组件注册表，并移除独立 wireframe 模式参数
-3. 更新后检查所属 `.folder.md`
+2. 当前补齐了参考仓 wireframe 组件注册表，默认共享文案切到英文基线，并移除独立 wireframe 模式参数
+3. 当前补入“通用块”占位组件，默认弱语义、强命名
+4. 用户创建路径不再暴露 modal 组件类型，弹窗能力收敛到交互
+5. 更新后检查所属 `.folder.md`
 */
 
 import type {
@@ -101,7 +103,6 @@ const LAYOUT_ITEMS: ComponentSeed[] = [
   { type: 'section', label: 'Section', icon: 'Sec', width: 800, height: 400 },
   { type: 'sidebar', label: 'Sidebar', icon: 'Side', width: 240, height: 400 },
   { type: 'footer', label: 'Footer', icon: 'Ftr', width: 800, height: 160 },
-  { type: 'modal', label: 'Modal', icon: 'Dlg', width: 480, height: 300 },
   { type: 'banner', label: 'Banner', icon: 'Ban', width: 800, height: 48 },
   { type: 'drawer', label: 'Drawer', icon: 'Drw', width: 320, height: 400 },
   { type: 'popover', label: 'Popover', icon: 'Pop', width: 240, height: 160 },
@@ -146,6 +147,7 @@ const CONTROL_ITEMS: ComponentSeed[] = [
 ]
 
 const ELEMENT_ITEMS: ComponentSeed[] = [
+  { type: 'genericBlock', label: 'Generic Block', icon: 'Blk', width: 60, height: 80 },
   { type: 'avatar', label: 'Avatar', icon: 'Av', width: 48, height: 48 },
   { type: 'badge', label: 'Badge', icon: 'Bd', width: 80, height: 28 },
   { type: 'tag', label: 'Tag', icon: 'Tag', width: 72, height: 28 },
