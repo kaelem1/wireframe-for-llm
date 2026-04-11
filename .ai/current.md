@@ -1,1 +1,1 @@
-已修复创建后白屏：补回 `genericBlock` 元数据并移除 palette 的 modal 入口；同时修正生产构建，当前工作区回归与 `npm run build` 已通过。
+已在隔离 worktree 完成 build 修复并复验通过：`tsconfig.app.json` 排除测试和旧 `PreviewOverlay.tsx`，`storage.ts` 补 browser locale。
