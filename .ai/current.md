@@ -1,1 +1,1 @@
-已补上复制 JSON 成功 toast；右栏复制成功后在底部短暂显示“复制成功”，相关回归与构建已通过。
+已在隔离 worktree 完成 build 修复并复验通过：`tsconfig.app.json` 排除测试和旧 `PreviewOverlay.tsx`，`storage.ts` 补 browser locale。
