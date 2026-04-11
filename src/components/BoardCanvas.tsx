@@ -5,7 +5,7 @@
 3. 空白提示层收敛为单句提示，组件按钮进入连续放置
 4. 当前支持 Option/Alt 拖拽复制所选组件与越界移动缩放
 5. 拖动与缩放改为本地预览，松手一次性提交历史，避免 undo 按轨迹回放
-6. 待放置期间屏蔽其他图层的选中与拖拽入口
+6. 待放置期间屏蔽其他图层的选中与拖拽入口，并将新建图层切到无圆点的锁定高亮
 7. 更新后检查所属 `.folder.md`
 */
 
@@ -819,6 +819,8 @@ export function BoardCanvas() {
             {board.components.map((component) => {
               const preview = transformPreviewMap.get(component.id)
               const displayedComponent = preview ? { ...component, ...preview } : component
+              const isSelected = selectedComponentIds.includes(component.id)
+              const isPlacementLocked = isPlacingComponent && isSelected
               const firstInteraction = component.interactions[0]
               const badge =
                 firstInteraction?.action === 'showModal'
@@ -829,7 +831,8 @@ export function BoardCanvas() {
                 <WireframeBlock
                   key={`${component.id}-${isPlacingComponent ? 'placing' : 'free'}`}
                   component={displayedComponent}
-                  selected={selectedComponentIds.includes(component.id)}
+                  selected={isSelected && !isPlacementLocked}
+                  placementLocked={isPlacementLocked}
                   editing={editingComponentId === component.id}
                   badge={badge}
                   interactive={!isPlacingComponent}
@@ -862,7 +865,7 @@ export function BoardCanvas() {
               )
             })}
 
-            {visibleSelectedComponent && selectedComponentIds.length === 1 ? (
+            {visibleSelectedComponent && selectedComponentIds.length === 1 && !isPlacingComponent ? (
               <div
                 className="canvas-selection"
                 style={{

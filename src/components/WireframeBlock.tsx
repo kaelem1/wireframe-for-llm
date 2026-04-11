@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前按参考仓 wireframe mode 渲染分组骨架，而非仅展示图标名称
-3. 选中态补入更明显但低饱和的强调样式钩子
+3. 选中态补入更明显但低饱和的强调样式钩子，并区分待放置锁定高亮
 4. 当前支持待放置时切换为纯展示态，屏蔽块内交互
 5. 更新后检查所属 `.folder.md`
 */
@@ -14,6 +14,7 @@ import type { ComponentData, ComponentType } from '../types/schema'
 interface WireframeBlockProps {
   component: ComponentData
   selected?: boolean
+  placementLocked?: boolean
   editing?: boolean
   preview?: boolean
   badge?: string | null
@@ -461,6 +462,7 @@ export function WireframeBlock(props: WireframeBlockProps) {
   const {
     component,
     selected,
+    placementLocked,
     editing,
     preview,
     badge,
@@ -502,6 +504,7 @@ export function WireframeBlock(props: WireframeBlockProps) {
         'wireframe-block',
         selected ? 'is-selected' : '',
         selected ? 'is-selected-emphasis' : '',
+        placementLocked ? 'is-placement-locked' : '',
         preview ? 'is-preview' : '',
         component.type === 'Modal' || component.type === 'modal' ? 'is-modal' : '',
       ]

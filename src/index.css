@@ -6,7 +6,8 @@
 4. 左栏仅保留项目名与组件网格，toolbar 不再展示项目名输入
 5. 预览态改为原位，并锁定非画布区域
 6. workspace 底部 toast 采用悬浮胶囊样式，复制成功提示复用同一视觉并切为只读状态
-7. 更新后检查所属 `.folder.md`
+7. 待放置期间新建图层改用深色锁定高亮，不再显示普通选中外框与缩放圆点
+8. 更新后检查所属 `.folder.md`
 */
 
 :root {
@@ -511,6 +512,14 @@ body {
 }
 
 .wireframe-block.is-selected-emphasis {
+  box-shadow:
+    0 0 0 2px rgba(92, 61, 38, 0.1),
+    0 8px 18px rgba(92, 61, 38, 0.12);
+}
+
+.wireframe-block.is-placement-locked {
+  border-color: #5a3e31;
+  background: #f4e4d4;
   box-shadow:
     0 0 0 2px rgba(92, 61, 38, 0.1),
     0 8px 18px rgba(92, 61, 38, 0.12);

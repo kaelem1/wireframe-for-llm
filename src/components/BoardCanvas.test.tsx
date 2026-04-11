@@ -3,7 +3,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
-3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转与拖动一次性 undo 的回归
+3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转、拖动一次性 undo 与放置锁定选中态的回归
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -500,6 +500,43 @@ describe('BoardCanvas', () => {
     expect(placed?.type).toBe('genericBlock')
     expect(placed?.width).toBe(60)
     expect(placed?.height).toBe(80)
+  })
+
+  it('keeps a newly placed component in a placement-locked highlight without resize handles', () => {
+    const project = createProject('Test Project', 'Desktop')
+    useAppStore.getState().replaceProject(project)
+
+    const { container } = render(
+      <>
+        <ComponentPalette />
+        <BoardCanvas />
+      </>,
+    )
+    const canvas = container.querySelector('.board-canvas')
+
+    expect(canvas).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Button$/i }))
+
+    const scale = Number((canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''))
+
+    fireEvent.pointerDown(canvas as Element, {
+      button: 0,
+      clientX: 64 * scale,
+      clientY: 80 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 64 * scale,
+      clientY: 80 * scale,
+    })
+
+    const block = container.querySelector('.wireframe-block')
+
+    expect(useAppStore.getState().pendingComponentType).toBe('button')
+    expect(block?.className).toContain('is-placement-locked')
+    expect(block?.className).not.toContain('is-selected')
+    expect(container.querySelector('.canvas-selection')).toBeNull()
+    expect(container.querySelector('.canvas-selection__handle')).toBeNull()
   })
 
   it('allows marquee-selecting multiple components', () => {
