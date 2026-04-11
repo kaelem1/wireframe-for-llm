@@ -3,11 +3,11 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
-3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置与拖动一次性 undo 的回归
+3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast 与拖动一次性 undo 的回归
 4. 更新后检查所属 `.folder.md`
 */
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -278,6 +278,44 @@ describe('BoardCanvas', () => {
     expect(createObjectURLMock).toHaveBeenCalled()
     expect(anchorClickMock).toHaveBeenCalled()
     expect(revokeObjectURLMock).toHaveBeenCalled()
+  })
+
+  it('shows a success toast after copy json succeeds', async () => {
+    vi.useFakeTimers()
+
+    try {
+      setBrowserLanguage(['zh-CN', 'en-US'], 'zh-CN')
+      useAppStore.getState().loadWorkspace(null)
+
+      const project = createProject('测试项目', 'Desktop')
+      useAppStore.getState().replaceProject(project)
+
+      const writeTextMock = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(window.navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: writeTextMock },
+      })
+
+      render(<App />)
+
+      fireEvent.click(screen.getByRole('button', { name: '复制 JSON' }))
+
+      expect(writeTextMock).toHaveBeenCalledWith(useAppStore.getState().exportProjectJson())
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(screen.getByText('复制成功')).toBeTruthy()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500)
+      })
+
+      expect(screen.queryByText('复制成功')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps the layers section reachable when the interaction editor is long and the board has many layers', () => {

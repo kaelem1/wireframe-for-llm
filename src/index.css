@@ -5,7 +5,7 @@
 3. 左栏收敛为单滚动容器，右栏标题结构统一
 4. 左栏仅保留项目名与组件网格，toolbar 不再展示项目名输入
 5. 预览态改为原位，并锁定非画布区域
-6. workspace 底部 toast 采用悬浮胶囊样式
+6. workspace 底部 toast 采用悬浮胶囊样式，复制成功提示复用同一视觉并切为只读状态
 7. 更新后检查所属 `.folder.md`
 */
 
@@ -167,6 +167,12 @@ body {
   text-align: center;
   box-shadow: 0 16px 30px rgba(92, 61, 38, 0.18);
   pointer-events: auto;
+}
+
+.workspace-toast--status {
+  cursor: default;
+  bottom: 132px;
+  pointer-events: none;
 }
 
 .workspace__sidebar {

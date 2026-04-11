@@ -4,12 +4,12 @@
 2. 当前统一为单一画布工作流，项目名入口固定在左栏，locale 由浏览器自动检测
 3. Escape 只清当前已选组件，不清待放置组件
 4. 当前复用组件复制链路支持快捷键复制粘贴
-5. 顶部 toolbar 与 preview 入口已删除，导出能力移到右栏顶部
+5. 顶部 toolbar 与 preview 入口已删除，导出能力移到右栏顶部，复制 JSON 成功后在底部显示短时 toast
 6. 待放置时在 workspace 底部居中显示可点击的退出放置 toast
 7. 更新后检查所属 `.folder.md`
 */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BoardCanvas } from './components/BoardCanvas'
 import { BoardStrip } from './components/BoardStrip'
 import { ComponentPalette } from './components/ComponentPalette'
@@ -33,6 +33,7 @@ function isTypingTarget(target: EventTarget | null) {
 
 export default function App() {
   const clipboardRef = useRef<ProtoComponent[]>([])
+  const copyToastTimerRef = useRef<number | null>(null)
   const project = useAppStore((state) => state.project)
   const settings = useAppStore((state) => state.settings)
   const locale = useAppStore((state) => state.locale)
@@ -52,6 +53,7 @@ export default function App() {
   const redo = useAppStore((state) => state.redo)
   const selectComponent = useAppStore((state) => state.selectComponent)
   const setPendingComponentType = useAppStore((state) => state.setPendingComponentType)
+  const [isCopyToastVisible, setIsCopyToastVisible] = useState(false)
 
   useEffect(() => {
     if (!project) {
@@ -65,6 +67,15 @@ export default function App() {
     document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'
     document.title = locale === 'zh' ? '线框原型工具' : 'Wireframe Prototype Tool'
   }, [locale])
+
+  useEffect(
+    () => () => {
+      if (copyToastTimerRef.current !== null) {
+        window.clearTimeout(copyToastTimerRef.current)
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -140,7 +151,7 @@ export default function App() {
     project,
     redo,
     selectedComponentId,
-    selectedComponentIds.length,
+    selectedComponentIds,
     selectComponent,
     setPendingComponentType,
     undo,
@@ -156,6 +167,18 @@ export default function App() {
     )
   }
 
+  async function handleCopyJson(jsonText: string) {
+    await navigator.clipboard.writeText(jsonText)
+    setIsCopyToastVisible(true)
+    if (copyToastTimerRef.current !== null) {
+      window.clearTimeout(copyToastTimerRef.current)
+    }
+    copyToastTimerRef.current = window.setTimeout(() => {
+      setIsCopyToastVisible(false)
+      copyToastTimerRef.current = null
+    }, 1500)
+  }
+
   return (
     <div className="app-shell">
       <div className="workspace">
@@ -168,9 +191,15 @@ export default function App() {
         </main>
 
         <aside className="workspace__sidebar workspace__sidebar--right">
-          <InteractionPanel />
+          <InteractionPanel onCopyJson={handleCopyJson} />
         </aside>
       </div>
+
+      {isCopyToastVisible ? (
+        <div className="workspace-toast workspace-toast--status" role="status" aria-live="polite">
+          {t(locale, 'copySuccess')}
+        </div>
+      ) : null}
 
       {pendingComponentType ? (
         <button

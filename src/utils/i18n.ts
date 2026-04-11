@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前集中管理应用双语词典、浏览器语言检测与少量文案派生
-3. 当前补入 genericBlock、组件描述、属性切换、弹窗描述、原位预览、placement toast 与导出 JSON 备注文案
+3. 当前补入 genericBlock、组件描述、属性切换、弹窗描述、原位预览、placement/copy toast 与导出 JSON 备注文案
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -27,6 +27,7 @@ const messages = {
   en: {
     exportJson: 'Export JSON',
     copyJson: 'Copy JSON',
+    copySuccess: 'Copied successfully',
     importJson: 'Import JSON',
     preview: 'Preview',
     exitPreview: 'Exit Preview',
@@ -107,6 +108,7 @@ const messages = {
   zh: {
     exportJson: '导出 JSON',
     copyJson: '复制 JSON',
+    copySuccess: '复制成功',
     importJson: '导入 JSON',
     preview: '预览',
     exitPreview: '退出预览',

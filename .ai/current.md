@@ -1,1 +1,1 @@
-项目已迁到 `/Users/kaelem/dev/wireframe-for-llm`，远程仓库根已改正；本地独立仓库当前分支为 `wireframe-for-llm`。
+已在隔离 worktree 完成 build 修复并复验通过：`tsconfig.app.json` 排除测试和旧 `PreviewOverlay.tsx`，`storage.ts` 补 browser locale。

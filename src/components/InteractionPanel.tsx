@@ -5,7 +5,7 @@
 3. 图层拖拽提供目标态反馈，文案跟随 locale 切换
 4. showModal 交互改为直接编辑弹窗描述，不再选择 modal 组件
 5. 当前自动滚动到最近选中的图层，重复点击已选图层保持幂等
-6. 图层列表只保留主名称，不再显示类型副标题
+6. 图层列表只保留主名称，不再显示类型副标题；复制 JSON 成功 toast 由上层壳容器展示
 7. 更新后检查所属 `.folder.md`
 */
 
@@ -18,7 +18,11 @@ import type { ComponentType } from '../types/schema'
 
 const componentTypeOptions = Object.values(COMPONENT_DEFINITIONS)
 
-export function InteractionPanel() {
+type InteractionPanelProps = {
+  onCopyJson?: (jsonText: string) => Promise<void>
+}
+
+export function InteractionPanel({ onCopyJson }: InteractionPanelProps) {
   const locale = useAppStore((state) => state.locale)
   const project = useAppStore((state) => state.project)
   const activeBoardId = useAppStore((state) => state.activeBoardId)
@@ -36,6 +40,18 @@ export function InteractionPanel() {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const layerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const lastSelectedLayerId = selectedComponentIds.at(-1) ?? selectedComponentId
+
+  useEffect(() => {
+    if (!lastSelectedLayerId) {
+      return
+    }
+
+    layerRefs.current[lastSelectedLayerId]?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+    })
+  }, [lastSelectedLayerId, activeBoardId])
 
   if (!project || !activeBoardId) {
     return null
@@ -53,18 +69,6 @@ export function InteractionPanel() {
   const layeredComponents = board.components
     .map((component, boardIndex) => ({ component, boardIndex }))
     .reverse()
-  const lastSelectedLayerId = selectedComponentIds.at(-1) ?? selectedComponentId
-
-  useEffect(() => {
-    if (!lastSelectedLayerId) {
-      return
-    }
-
-    layerRefs.current[lastSelectedLayerId]?.scrollIntoView({
-      block: 'nearest',
-      inline: 'nearest',
-    })
-  }, [lastSelectedLayerId, activeBoardId])
 
   return (
     <div className="panel">
@@ -85,7 +89,7 @@ export function InteractionPanel() {
           type="button"
           className="ghost-button panel__copy-button"
           onClick={() => {
-            void navigator.clipboard.writeText(exportProject())
+            void (onCopyJson?.(exportProject()) ?? navigator.clipboard.writeText(exportProject()))
           }}
         >
           {t(locale, 'copyJson')}
