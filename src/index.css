@@ -328,9 +328,16 @@ body {
 
 .panel__github-button {
   flex: 0 0 72px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.panel__github-button svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
 }
 
 .board-strip__add {
