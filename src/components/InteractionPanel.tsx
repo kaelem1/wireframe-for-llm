@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前在右栏同时承接导出/复制/GitHub logo 跳转、单选交互编辑、描述与属性编辑、多选批量操作与图层拖拽排序，交互编辑区独立滚动、图层区保持常驻可见
-3. 图层拖拽提供目标态反馈，文案跟随 locale 切换
+3. 图层拖拽提供目标态反馈与左侧 grip 提示，文案跟随 locale 切换
 4. showModal 交互改为直接编辑弹窗描述，不再选择 modal 组件
 5. 当前自动滚动到最近选中的图层，重复点击已选图层保持幂等
 6. 图层列表只保留主名称，不再显示类型副标题；复制 JSON 成功 toast 由上层壳容器展示
@@ -324,7 +324,8 @@ export function InteractionPanel({ onCopyJson }: InteractionPanelProps) {
                 }
               }}
             >
-              <span>{component.name}</span>
+              <span className="layer-item__grip" aria-hidden="true" />
+              <span className="layer-item__name">{component.name}</span>
             </button>
           ))}
         </div>
