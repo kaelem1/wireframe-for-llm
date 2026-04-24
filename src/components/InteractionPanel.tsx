@@ -6,7 +6,8 @@
 4. showModal 交互改为直接编辑弹窗描述，不再选择 modal 组件
 5. 当前自动滚动到最近选中的图层，重复点击已选图层保持幂等
 6. 图层列表只保留主名称，不再显示类型副标题；复制/导出 JSON 成功 toast 由上层壳容器展示
-7. 更新后检查所属 `.folder.md`
+7. 图层名称编辑使用本地草稿，失焦/回车时提交并防重，空值保持编辑焦点
+8. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useRef, useState } from 'react'
@@ -40,8 +41,16 @@ export function InteractionPanel({ onCopyJson, onExportJson }: InteractionPanelP
   const reorderComponents = useAppStore((state) => state.reorderComponents)
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [draftName, setDraftName] = useState('')
+  const nameInputRef = useRef<HTMLInputElement | null>(null)
   const layerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const lastSelectedLayerId = selectedComponentIds.at(-1) ?? selectedComponentId
+  const board = project && activeBoardId ? getBoardById(project, activeBoardId) : null
+  const isMultiSelect = selectedComponentIds.length > 1
+  const selected =
+    project && !isMultiSelect && selectedComponentId
+      ? findComponentById(project, selectedComponentId)?.component ?? null
+      : null
 
   useEffect(() => {
     if (!lastSelectedLayerId) {
@@ -54,22 +63,34 @@ export function InteractionPanel({ onCopyJson, onExportJson }: InteractionPanelP
     })
   }, [lastSelectedLayerId, activeBoardId])
 
-  if (!project || !activeBoardId) {
-    return null
-  }
+  useEffect(() => {
+    setDraftName(selected?.name ?? '')
+  }, [selected?.id, selected?.name])
 
-  const board = getBoardById(project, activeBoardId)
-  const isMultiSelect = selectedComponentIds.length > 1
-  const selected =
-    !isMultiSelect && selectedComponentId ? findComponentById(project, selectedComponentId)?.component : null
-
-  if (!board) {
+  if (!project || !activeBoardId || !board) {
     return null
   }
 
   const layeredComponents = board.components
     .map((component, boardIndex) => ({ component, boardIndex }))
     .reverse()
+
+  const commitDraftName = () => {
+    if (!selected) {
+      return true
+    }
+
+    const nextName = draftName.trim()
+    if (!nextName) {
+      nameInputRef.current?.focus()
+      return false
+    }
+
+    if (nextName !== selected.name) {
+      updateComponent(selected.id, { name: nextName })
+    }
+    return true
+  }
 
   return (
     <div className="panel">
@@ -124,8 +145,19 @@ export function InteractionPanel({ onCopyJson, onExportJson }: InteractionPanelP
               <label className="form-field">
                 <span>{t(locale, 'name')}</span>
                 <input
-                  value={selected.name}
-                  onChange={(event) => updateComponent(selected.id, { name: event.target.value })}
+                  ref={nameInputRef}
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  onBlur={commitDraftName}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && commitDraftName()) {
+                      event.currentTarget.blur()
+                    }
+                    if (event.key === 'Escape') {
+                      setDraftName(selected.name)
+                      event.currentTarget.blur()
+                    }
+                  }}
                 />
               </label>
 

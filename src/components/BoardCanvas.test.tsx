@@ -2,7 +2,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示与拖拽 grip 提示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
+2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层名草稿编辑、图层主名称展示与拖拽 grip 提示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
 3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转、拖动一次性 undo 与放置锁定选中态的回归
 4. 覆盖 setup 弹层居中、导出操作区 60px 高度、GitHub 60px 方形入口与画板菜单提层
 5. 覆盖 canvas stage 完整显示画板且无外壳视觉
@@ -1256,6 +1256,41 @@ describe('BoardCanvas', () => {
     const names = useAppStore.getState().project?.boards[0]?.components.map((component) => component.name) ?? []
 
     expect(names).toEqual(['Gallery', 'Gallery1'])
+  })
+
+  it('keeps layer name typing as a draft until committing', () => {
+    const project = createProject('Test Project', 'Desktop')
+    const board = project.boards[0]
+    const first = createComponent('Button', board, project.boardSize, { x: 48, y: 48 })
+    const second = createComponent('Card', board, project.boardSize, { x: 96, y: 96 })
+    first.name = 'Name'
+    second.name = 'Layer'
+    board.components.push(first, second)
+    useAppStore.getState().replaceProject(project)
+    useAppStore.getState().selectComponent(second.id)
+
+    render(<InteractionPanel />)
+    const nameInput = screen.getByLabelText('Name') as HTMLInputElement
+
+    fireEvent.change(nameInput, { target: { value: '' } })
+
+    expect(nameInput.value).toBe('')
+    expect(useAppStore.getState().project?.boards[0]?.components[1]?.name).toBe('Layer')
+
+    fireEvent.blur(nameInput)
+
+    expect(document.activeElement).toBe(nameInput)
+    expect(useAppStore.getState().project?.boards[0]?.components[1]?.name).toBe('Layer')
+
+    fireEvent.change(nameInput, { target: { value: 'Name' } })
+
+    expect(nameInput.value).toBe('Name')
+    expect(useAppStore.getState().project?.boards[0]?.components[1]?.name).toBe('Layer')
+
+    fireEvent.blur(nameInput)
+
+    expect(useAppStore.getState().project?.boards[0]?.components[1]?.name).toBe('Name1')
+    expect(nameInput.value).toBe('Name1')
   })
 
   it('uses a consistent English label system in the side panels', () => {

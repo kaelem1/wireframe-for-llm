@@ -4,10 +4,19 @@
 2. 当前按参考仓 wireframe mode 渲染分组骨架，而非仅展示图标名称
 3. 选中态补入更明显但低饱和的强调样式钩子，并区分待放置锁定高亮
 4. 当前支持待放置时切换为纯展示态，屏蔽块内交互
-5. 更新后检查所属 `.folder.md`
+5. 块内名称编辑允许临时空值，空值不提交并保持焦点
+6. 更新后检查所属 `.folder.md`
 */
 
-import { useEffect, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactElement } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactElement,
+} from 'react'
 import { COMPONENT_DEFINITIONS } from '../utils/constants'
 import type { ComponentData, ComponentType } from '../types/schema'
 
@@ -476,6 +485,7 @@ export function WireframeBlock(props: WireframeBlockProps) {
     onResizePointerDown,
   } = props
   const [draftName, setDraftName] = useState(component.name)
+  const nameInputRef = useRef<HTMLInputElement | null>(null)
   const definition = COMPONENT_DEFINITIONS[component.type]
 
   useEffect(() => {
@@ -483,7 +493,14 @@ export function WireframeBlock(props: WireframeBlockProps) {
   }, [component.name, editing])
 
   const commit = (value: string) => {
-    onCommitName?.(value.trim() || component.name)
+    const nextName = value.trim()
+    if (!nextName) {
+      nameInputRef.current?.focus()
+      return false
+    }
+
+    onCommitName?.(nextName)
+    return true
   }
 
   const interactiveHandlers = interactive
@@ -538,6 +555,7 @@ export function WireframeBlock(props: WireframeBlockProps) {
           <span className="wireframe-block__icon">{definition.icon}</span>
           {editing ? (
             <input
+              ref={nameInputRef}
               className="wireframe-block__name-input"
               value={draftName}
               autoFocus
