@@ -1,7 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 更新后检查所属 `.folder.md`
+2. 当前仅展示固定设备预设，不提供自定义尺寸入口
+3. 更新后检查所属 `.folder.md`
 */
 
 import { useMemo, useState } from 'react'
@@ -15,8 +16,6 @@ interface SetupDialogProps {
 export function SetupDialog({ onCreate }: SetupDialogProps) {
   const [projectName, setProjectName] = useState(DEFAULT_PROJECT_NAME)
   const [device, setDevice] = useState<DevicePresetKey>('iPhone')
-  const [customWidth, setCustomWidth] = useState('390')
-  const [customHeight, setCustomHeight] = useState('844')
 
   const preset = useMemo(
     () => DEVICE_PRESETS.find((item) => item.key === device) ?? DEVICE_PRESETS[0],
@@ -44,25 +43,10 @@ export function SetupDialog({ onCreate }: SetupDialogProps) {
               onClick={() => setDevice(item.key)}
             >
               <span>{item.label}</span>
-              <small>
-                {item.key === 'Custom' ? '手动输入尺寸' : `${item.width} × ${item.height}`}
-              </small>
+              <small>{item.width} × {item.height}</small>
             </button>
           ))}
         </div>
-
-        {device === 'Custom' ? (
-          <div className="setup-screen__custom-size">
-            <label className="form-field">
-              <span>宽度</span>
-              <input value={customWidth} onChange={(event) => setCustomWidth(event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>高度</span>
-              <input value={customHeight} onChange={(event) => setCustomHeight(event.target.value)} />
-            </label>
-          </div>
-        ) : null}
 
         <button
           type="button"
@@ -71,8 +55,8 @@ export function SetupDialog({ onCreate }: SetupDialogProps) {
             onCreate(
               projectName.trim() || DEFAULT_PROJECT_NAME,
               device,
-              device === 'Custom' ? Number(customWidth) || preset.width : preset.width,
-              device === 'Custom' ? Number(customHeight) || preset.height : preset.height,
+              preset.width,
+              preset.height,
             )
           }
         >

@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前集中管理应用双语词典、浏览器语言检测与少量文案派生
-3. 当前补入 genericBlock、组件描述、属性切换、弹窗描述、原位预览、placement/copy toast 与导出 JSON 备注文案
+3. 当前补入 genericBlock、组件描述、属性切换、弹窗描述、原位预览、placement/copy/export toast 与导出 JSON 备注文案
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -27,7 +27,8 @@ const messages = {
   en: {
     exportJson: 'Export JSON',
     copyJson: 'Copy JSON',
-    copySuccess: 'Copied successfully',
+    copySuccess: '复制成功，发给AI还原吧～',
+    exportSuccess: '导出成功，发给AI还原吧～',
     importJson: 'Import JSON',
     preview: 'Preview',
     exitPreview: 'Exit Preview',
@@ -73,7 +74,6 @@ const messages = {
     width: 'Width',
     height: 'Height',
     createProject: 'Create Project',
-    manualSize: 'Enter custom size',
     aiGenerator: 'AI Generate',
     close: 'Close',
     describeFlow: 'Describe the page or flow',
@@ -108,7 +108,8 @@ const messages = {
   zh: {
     exportJson: '导出 JSON',
     copyJson: '复制 JSON',
-    copySuccess: '复制成功',
+    copySuccess: '复制成功，发给AI还原吧～',
+    exportSuccess: '导出成功，发给AI还原吧～',
     importJson: '导入 JSON',
     preview: '预览',
     exitPreview: '退出预览',
@@ -154,7 +155,6 @@ const messages = {
     width: '宽度',
     height: '高度',
     createProject: '创建项目',
-    manualSize: '手动输入尺寸',
     aiGenerator: 'AI 生成',
     close: '关闭',
     describeFlow: '描述页面或流程',

@@ -5,7 +5,7 @@
 3. 左栏收敛为单滚动容器，右栏标题结构统一
 4. 左栏仅保留项目名与组件网格，toolbar 不再展示项目名输入
 5. 预览态改为原位，并锁定非画布区域
-6. workspace 底部 toast 采用悬浮胶囊样式，复制成功提示复用同一视觉并切为只读状态
+6. workspace 底部 toast 采用悬浮胶囊样式，复制/导出成功提示复用同一视觉并切为只读状态
 7. 待放置期间新建图层改用深色锁定高亮，不再显示普通选中外框与缩放圆点
 8. 图层列表项左侧补入轻量拖拽 grip 提示，整行仍保持可拖拽排序
 9. setup 首屏全视口居中，右栏导出区固定 60px，画板菜单脱离滚动列表裁切
@@ -137,7 +137,6 @@ body {
   transform: translateY(-1px);
 }
 
-.panel__export-button--primary,
 .dialog__primary {
   border-color: #5a3e31;
   background: #5a3e31;
@@ -326,11 +325,6 @@ body {
 
 .panel__export-button {
   flex: 2;
-}
-
-.panel__export-button--primary {
-  background: #5a3e31;
-  color: #fff;
 }
 
 .panel__copy-button {
@@ -982,12 +976,6 @@ body {
 .device-card.is-active {
   border-color: #5a3e31;
   background: #f4e4d4;
-}
-
-.setup-screen__custom-size {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
 }
 
 .preview-overlay {

@@ -5,7 +5,8 @@
 3. 当前补入“通用块”占位组件，默认弱语义、强命名
 4. 用户创建路径不再暴露 modal 组件类型，弹窗能力收敛到交互
 5. 画布缩放不再使用额外 stage padding 常量
-6. 更新后检查所属 `.folder.md`
+6. 用户创建路径仅暴露固定设备预设，不提供自定义尺寸
+7. 更新后检查所属 `.folder.md`
 */
 
 import type {
@@ -93,7 +94,6 @@ export const DEVICE_OPTIONS: DeviceOption[] = [
   { id: 'Android', label: 'Android', size: { width: 412, height: 915 } },
   { id: 'iPad', label: 'iPad', size: { width: 1024, height: 1366 } },
   { id: 'Desktop', label: 'Desktop', size: { width: 1440, height: 900 } },
-  { id: 'Custom', label: '自定义', size: { width: 390, height: 844 } },
 ]
 
 const LAYOUT_ITEMS: ComponentSeed[] = [

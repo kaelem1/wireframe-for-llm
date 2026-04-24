@@ -296,7 +296,6 @@ describe('BoardCanvas', () => {
     const actionsRule = appStyles.match(/\.panel__export-actions\s*\{[^}]*\}/)?.[0] ?? ''
     const exportRule = appStyles.match(/\.panel__export-button\s*\{[^}]*\}/)?.[0] ?? ''
     const copyRule = appStyles.match(/\.panel__copy-button\s*\{[^}]*\}/)?.[0] ?? ''
-    const exportPrimaryRule = appStyles.match(/\.panel__export-button--primary\s*\{[^}]*\}/)?.[0] ?? ''
     const githubRule = appStyles.match(/\.panel__github-button\s*\{[^}]*\}/)?.[0] ?? ''
 
     expect(buttonGroup).not.toBeNull()
@@ -304,7 +303,7 @@ describe('BoardCanvas', () => {
     expect(buttonGroup?.children[0]).toBe(exportButton)
     expect(buttonGroup?.children[1]).toBe(copyButton)
     expect(buttonGroup?.children[2]).toBe(githubButton)
-    expect(exportButton.className).toContain('panel__export-button--primary')
+    expect(exportButton.className).not.toContain('panel__export-button--primary')
     expect(actionsRule).toContain('height: 60px;')
     expect(exportRule).toContain('flex: 2;')
     expect(copyRule).toContain('flex: 1;')
@@ -312,8 +311,7 @@ describe('BoardCanvas', () => {
     expect(githubRule).toContain('width: 60px;')
     expect(githubRule).toContain('height: 60px;')
     expect(githubButton.querySelector('svg')).not.toBeNull()
-    expect(exportPrimaryRule).toContain('background: #5a3e31;')
-    expect(exportPrimaryRule).toContain('color: #fff;')
+    expect(appStyles).not.toContain('.panel__export-button--primary')
 
     fireEvent.click(copyButton)
 
@@ -334,7 +332,7 @@ describe('BoardCanvas', () => {
     )
   })
 
-  it('shows a success toast after copy json succeeds', async () => {
+  it('shows a restore hint toast after copy and export json succeed', async () => {
     vi.useFakeTimers()
 
     try {
@@ -345,10 +343,27 @@ describe('BoardCanvas', () => {
       useAppStore.getState().replaceProject(project)
 
       const writeTextMock = vi.fn().mockResolvedValue(undefined)
+      const createObjectURLMock = vi.fn(() => 'blob:test')
+      const revokeObjectURLMock = vi.fn()
+      const anchorClickMock = vi.fn()
+      vi.stubGlobal('URL', {
+        createObjectURL: createObjectURLMock,
+        revokeObjectURL: revokeObjectURLMock,
+      })
       Object.defineProperty(window.navigator, 'clipboard', {
         configurable: true,
         value: { writeText: writeTextMock },
       })
+      vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
+        const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName)
+        if (tagName === 'a') {
+          Object.defineProperty(element, 'click', {
+            configurable: true,
+            value: anchorClickMock,
+          })
+        }
+        return element
+      }) as typeof document.createElement)
 
       render(<App />)
 
@@ -360,16 +375,37 @@ describe('BoardCanvas', () => {
         await Promise.resolve()
       })
 
-      expect(screen.getByText('复制成功')).toBeTruthy()
+      expect(screen.getByText('复制成功，发给AI还原吧～')).toBeTruthy()
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1500)
       })
 
-      expect(screen.queryByText('复制成功')).toBeNull()
+      expect(screen.queryByText('复制成功，发给AI还原吧～')).toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: '导出 JSON' }))
+
+      expect(createObjectURLMock).toHaveBeenCalled()
+      expect(anchorClickMock).toHaveBeenCalled()
+      expect(revokeObjectURLMock).toHaveBeenCalled()
+      expect(screen.getByText('导出成功，发给AI还原吧～')).toBeTruthy()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500)
+      })
+
+      expect(screen.queryByText('导出成功，发给AI还原吧～')).toBeNull()
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('does not expose a custom device size option on setup', () => {
+    const { container } = render(<SetupDialog onCreate={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: /自定义/ })).toBeNull()
+    expect(screen.queryByText('手动输入尺寸')).toBeNull()
+    expect(container.querySelector('.setup-screen__custom-size')).toBeNull()
   })
 
   it('keeps the layers section reachable when the interaction editor is long and the board has many layers', () => {

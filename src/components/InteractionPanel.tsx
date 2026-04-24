@@ -5,7 +5,7 @@
 3. 图层拖拽提供目标态反馈与左侧 grip 提示，文案跟随 locale 切换
 4. showModal 交互改为直接编辑弹窗描述，不再选择 modal 组件
 5. 当前自动滚动到最近选中的图层，重复点击已选图层保持幂等
-6. 图层列表只保留主名称，不再显示类型副标题；复制 JSON 成功 toast 由上层壳容器展示
+6. 图层列表只保留主名称，不再显示类型副标题；复制/导出 JSON 成功 toast 由上层壳容器展示
 7. 更新后检查所属 `.folder.md`
 */
 
@@ -20,9 +20,10 @@ const componentTypeOptions = Object.values(COMPONENT_DEFINITIONS)
 
 type InteractionPanelProps = {
   onCopyJson?: (jsonText: string) => Promise<void>
+  onExportJson?: (jsonText: string) => void
 }
 
-export function InteractionPanel({ onCopyJson }: InteractionPanelProps) {
+export function InteractionPanel({ onCopyJson, onExportJson }: InteractionPanelProps) {
   const locale = useAppStore((state) => state.locale)
   const project = useAppStore((state) => state.project)
   const activeBoardId = useAppStore((state) => state.activeBoardId)
@@ -75,13 +76,15 @@ export function InteractionPanel({ onCopyJson }: InteractionPanelProps) {
       <div className="panel__export-actions">
         <button
           type="button"
-          className="ghost-button panel__export-button panel__export-button--primary"
-          onClick={() =>
+          className="ghost-button panel__export-button"
+          onClick={() => {
+            const jsonText = exportProject()
             downloadJson(
               `${project.project || t(locale, 'defaultProjectName')}.json`,
-              JSON.parse(exportProject()),
+              JSON.parse(jsonText),
             )
-          }
+            onExportJson?.(jsonText)
+          }}
         >
           {t(locale, 'exportJson')}
         </button>
@@ -89,7 +92,8 @@ export function InteractionPanel({ onCopyJson }: InteractionPanelProps) {
           type="button"
           className="ghost-button panel__copy-button"
           onClick={() => {
-            void (onCopyJson?.(exportProject()) ?? navigator.clipboard.writeText(exportProject()))
+            const jsonText = exportProject()
+            void (onCopyJson?.(jsonText) ?? navigator.clipboard.writeText(jsonText))
           }}
         >
           {t(locale, 'copyJson')}

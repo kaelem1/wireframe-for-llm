@@ -4,7 +4,7 @@
 2. 当前统一为单一画布工作流，项目名入口固定在左栏，locale 由浏览器自动检测
 3. Escape 只清当前已选组件，不清待放置组件
 4. 当前复用组件复制链路支持快捷键复制粘贴
-5. 顶部 toolbar 与 preview 入口已删除，导出能力移到右栏顶部，复制 JSON 成功后在底部显示短时 toast
+5. 顶部 toolbar 与 preview 入口已删除，导出能力移到右栏顶部，复制/导出 JSON 成功后在底部显示短时 toast
 6. 待放置时在 workspace 底部居中显示可点击的退出放置 toast
 7. 更新后检查所属 `.folder.md`
 */
@@ -33,7 +33,7 @@ function isTypingTarget(target: EventTarget | null) {
 
 export default function App() {
   const clipboardRef = useRef<ProtoComponent[]>([])
-  const copyToastTimerRef = useRef<number | null>(null)
+  const actionToastTimerRef = useRef<number | null>(null)
   const project = useAppStore((state) => state.project)
   const settings = useAppStore((state) => state.settings)
   const locale = useAppStore((state) => state.locale)
@@ -53,7 +53,7 @@ export default function App() {
   const redo = useAppStore((state) => state.redo)
   const selectComponent = useAppStore((state) => state.selectComponent)
   const setPendingComponentType = useAppStore((state) => state.setPendingComponentType)
-  const [isCopyToastVisible, setIsCopyToastVisible] = useState(false)
+  const [actionToastMessage, setActionToastMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!project) {
@@ -70,8 +70,8 @@ export default function App() {
 
   useEffect(
     () => () => {
-      if (copyToastTimerRef.current !== null) {
-        window.clearTimeout(copyToastTimerRef.current)
+      if (actionToastTimerRef.current !== null) {
+        window.clearTimeout(actionToastTimerRef.current)
       }
     },
     [],
@@ -167,16 +167,24 @@ export default function App() {
     )
   }
 
+  function showActionToast(message: string) {
+    setActionToastMessage(message)
+    if (actionToastTimerRef.current !== null) {
+      window.clearTimeout(actionToastTimerRef.current)
+    }
+    actionToastTimerRef.current = window.setTimeout(() => {
+      setActionToastMessage(null)
+      actionToastTimerRef.current = null
+    }, 1500)
+  }
+
   async function handleCopyJson(jsonText: string) {
     await navigator.clipboard.writeText(jsonText)
-    setIsCopyToastVisible(true)
-    if (copyToastTimerRef.current !== null) {
-      window.clearTimeout(copyToastTimerRef.current)
-    }
-    copyToastTimerRef.current = window.setTimeout(() => {
-      setIsCopyToastVisible(false)
-      copyToastTimerRef.current = null
-    }, 1500)
+    showActionToast(t(locale, 'copySuccess'))
+  }
+
+  function handleExportJson() {
+    showActionToast(t(locale, 'exportSuccess'))
   }
 
   return (
@@ -191,13 +199,13 @@ export default function App() {
         </main>
 
         <aside className="workspace__sidebar workspace__sidebar--right">
-          <InteractionPanel onCopyJson={handleCopyJson} />
+          <InteractionPanel onCopyJson={handleCopyJson} onExportJson={handleExportJson} />
         </aside>
       </div>
 
-      {isCopyToastVisible ? (
+      {actionToastMessage ? (
         <div className="workspace-toast workspace-toast--status" role="status" aria-live="polite">
-          {t(locale, 'copySuccess')}
+          {actionToastMessage}
         </div>
       ) : null}
 
