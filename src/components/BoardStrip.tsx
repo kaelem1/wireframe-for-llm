@@ -3,11 +3,14 @@
 1. 逻辑变更后更新此 Header
 2. 当前画板按钮将删除收进“更多”菜单，并支持整板创建副本
 3. 画板更多菜单提升到 `.board-strip` 直系绝对定位层，避免被横向滚动列表裁切
-4. 更新后检查所属 `.folder.md`
+4. 当前菜单、新建画板按钮跟随 locale 使用共享词典
+5. 当前 active 画板 chip 自动滚入可视区域
+6. 更新后检查所属 `.folder.md`
 */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
+import { t } from '../utils/i18n'
 
 export function BoardStrip() {
   const project = useAppStore((state) => state.project)
@@ -18,8 +21,19 @@ export function BoardStrip() {
   const deleteBoard = useAppStore((state) => state.deleteBoard)
   const reorderBoards = useAppStore((state) => state.reorderBoards)
   const updateBoardName = useAppStore((state) => state.updateBoardName)
+  const locale = useAppStore((state) => state.locale)
   const stripRef = useRef<HTMLDivElement | null>(null)
+  const chipRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [menuAnchor, setMenuAnchor] = useState<{ boardId: string; left: number; bottom: number } | null>(null)
+
+  useEffect(() => {
+    if (activeBoardId) {
+      chipRefs.current[activeBoardId]?.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+      })
+    }
+  }, [activeBoardId, project?.boards.length])
 
   if (!project) {
     return null
@@ -31,6 +45,9 @@ export function BoardStrip() {
         {project.boards.map((board, index) => (
           <div
             key={board.id}
+            ref={(element) => {
+              chipRefs.current[board.id] = element
+            }}
             className={[
               'board-chip',
               board.id === activeBoardId ? 'is-active' : '',
@@ -76,9 +93,9 @@ export function BoardStrip() {
                     bottom: stripRect.bottom - buttonRect.top + 6,
                   })
                 }}
-                aria-label={`更多${board.name}`}
+                aria-label={t(locale, 'moreForBoard', { name: board.name })}
               >
-                更多
+                {t(locale, 'more')}
               </button>
             </div>
           </div>
@@ -96,7 +113,7 @@ export function BoardStrip() {
               setMenuAnchor(null)
             }}
           >
-            创建副本
+            {t(locale, 'createCopy')}
           </button>
           <button
             type="button"
@@ -105,12 +122,12 @@ export function BoardStrip() {
               setMenuAnchor(null)
             }}
           >
-            删除
+            {t(locale, 'delete')}
           </button>
         </div>
       ) : null}
       <button type="button" className="board-strip__add" onClick={addBoard}>
-        + 新建画板
+        {t(locale, 'addBoard')}
       </button>
     </div>
   )

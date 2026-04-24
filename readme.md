@@ -13,7 +13,3 @@
 - `npm run dev`
 - `npm run build`
 - `npm run preview`
-
-## 致谢
-
-本项目部分组件源码与设计灵感来自 [agentation](https://github.com/benjitaylor/agentation)。

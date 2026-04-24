@@ -2,7 +2,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层名草稿编辑、图层主名称展示与拖拽 grip 提示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
+2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、七类组件面板、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层名草稿编辑、图层主名称展示与拖拽 grip 提示、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
 3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转、拖动一次性 undo 与放置锁定选中态的回归
 4. 覆盖 setup 弹层居中、导出操作区 60px 高度、GitHub 60px 方形入口与画板菜单提层
 5. 覆盖 canvas stage 完整显示画板且无外壳视觉
@@ -39,13 +39,15 @@ class ResizeObserverMock {
 const scrollIntoViewMock = vi.fn()
 
 function setBrowserLanguage(languages: string[], language = languages[0] ?? 'en-US') {
-  Object.defineProperty(window.navigator, 'languages', {
+  const navigatorValue = { languages, language } as Navigator
+
+  Object.defineProperty(window, 'navigator', {
     configurable: true,
-    value: languages,
+    value: navigatorValue,
   })
-  Object.defineProperty(window.navigator, 'language', {
+  Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
-    value: language,
+    value: navigatorValue,
   })
 }
 
@@ -183,25 +185,26 @@ describe('BoardCanvas', () => {
     expect(container.querySelector('.panel__header--palette')).toBeNull()
     expect(screen.getAllByLabelText('Project Name')).toHaveLength(1)
     expect(container.querySelector('.panel--palette > .panel__project-name')).not.toBeNull()
-    expect(screen.getByRole('button', { name: /^Button$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Input$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Commerce$/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Button$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^Modal$/i })).toBeNull()
     expect(screen.queryByText('140 × 40')).toBeNull()
   })
 
-  it('shows generic block as the first standalone entry in the component palette', () => {
+  it('shows the seven low-semantic component categories in the palette', () => {
     const project = createProject('Test Project', 'Desktop')
     useAppStore.getState().replaceProject(project)
 
     const { container } = render(<ComponentPalette />)
     const sections = container.querySelectorAll('.component-palette__section')
-    const firstSectionButtons = sections[0]?.querySelectorAll('.component-palette__item')
-    const laterSectionText = Array.from(sections)
-      .slice(1)
-      .some((section) => section.textContent?.includes('Generic Block'))
+    const labels = Array.from(container.querySelectorAll('.component-palette__item')).map((item) =>
+      item.textContent,
+    )
 
-    expect(firstSectionButtons).toHaveLength(1)
-    expect(firstSectionButtons?.[0]?.textContent).toBe('Generic Block')
-    expect(laterSectionText).toBe(false)
+    expect(sections).toHaveLength(7)
+    expect(labels).toEqual(['Layout', 'Content', 'Input', 'Navigation', 'Feedback', 'Media', 'Commerce'])
+    expect(screen.queryByRole('button', { name: /Generic Block|通用块/ })).toBeNull()
   })
 
   it('keeps the project name editable when cleared', () => {
@@ -480,7 +483,7 @@ describe('BoardCanvas', () => {
       (canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /^Button$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Input$/i }))
 
     fireEvent.pointerDown(canvas as Element, {
       button: 0,
@@ -494,11 +497,11 @@ describe('BoardCanvas', () => {
 
     const placed = useAppStore.getState().project?.boards[0]?.components[0]
 
-    expect(placed?.type).toBe('button')
+    expect(placed?.type).toBe('input')
     expect(placed?.x).toBe(48)
     expect(placed?.y).toBe(72)
-    expect(placed?.width).toBe(140)
-    expect(placed?.height).toBe(40)
+    expect(placed?.width).toBe(280)
+    expect(placed?.height).toBe(56)
   })
 
   it('draws a custom frame when dragging on the canvas without pixel annotations', () => {
@@ -521,7 +524,7 @@ describe('BoardCanvas', () => {
       (canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /^Button$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Input$/i }))
 
     fireEvent.pointerDown(canvas as Element, {
       button: 0,
@@ -542,14 +545,14 @@ describe('BoardCanvas', () => {
 
     const placed = useAppStore.getState().project?.boards[0]?.components[0]
 
-    expect(placed?.type).toBe('button')
+    expect(placed?.type).toBe('input')
     expect(placed?.x).toBe(40)
     expect(placed?.y).toBe(56)
     expect(placed?.width).toBe(184)
     expect(placed?.height).toBeCloseTo(64)
   })
 
-  it('creates a generic block component at 60 by 80', () => {
+  it('creates a media component at its new category default size', () => {
     const project = createProject('Test Project', 'Desktop')
     useAppStore.getState().replaceProject(project)
 
@@ -563,7 +566,7 @@ describe('BoardCanvas', () => {
 
     expect(canvas).not.toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: /Generic Block|通用块/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Media$/i }))
 
     const scale = Number((canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''))
 
@@ -578,9 +581,9 @@ describe('BoardCanvas', () => {
     })
 
     const placed = useAppStore.getState().project?.boards[0]?.components[0]
-    expect(placed?.type).toBe('genericBlock')
-    expect(placed?.width).toBe(60)
-    expect(placed?.height).toBe(80)
+    expect(placed?.type).toBe('media')
+    expect(placed?.width).toBe(480)
+    expect(placed?.height).toBe(270)
   })
 
   it('keeps a newly placed component in a placement-locked highlight without resize handles', () => {
@@ -597,7 +600,7 @@ describe('BoardCanvas', () => {
 
     expect(canvas).not.toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: /^Button$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Input$/i }))
 
     const scale = Number((canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''))
 
@@ -613,7 +616,7 @@ describe('BoardCanvas', () => {
 
     const block = container.querySelector('.wireframe-block')
 
-    expect(useAppStore.getState().pendingComponentType).toBe('button')
+    expect(useAppStore.getState().pendingComponentType).toBe('input')
     expect(block?.className).toContain('is-placement-locked')
     expect(block?.className).not.toContain('is-selected')
     expect(container.querySelector('.canvas-selection')).toBeNull()
@@ -809,12 +812,12 @@ describe('BoardCanvas', () => {
     expect(components[1]?.y).not.toBe(component.y)
   })
 
-  it('allows header and navigation components to move and resize freely', () => {
+  it('allows layout and navigation components to move and resize freely', () => {
     const project = createProject('测试项目', 'Desktop')
     const board = project.boards[0]
-    const header = createComponent('header', board, project.boardSize, { x: 48, y: 40 })
+    const layout = createComponent('layout', board, project.boardSize, { x: 48, y: 40 })
     const navigation = createComponent('navigation', board, project.boardSize, { x: 88, y: 152 })
-    board.components.push(header, navigation)
+    board.components.push(layout, navigation)
     useAppStore.getState().replaceProject(project)
 
     const { container } = render(<BoardCanvas />)
@@ -837,8 +840,8 @@ describe('BoardCanvas', () => {
 
     fireEvent.pointerDown(resizeHandle as Element, {
       button: 0,
-      clientX: (header.x + header.width) * scale,
-      clientY: (header.y + header.height) * scale,
+      clientX: (layout.x + layout.width) * scale,
+      clientY: (layout.y + layout.height) * scale,
     })
     fireEvent.pointerMove(window, {
       clientX: 320 * scale,
@@ -849,9 +852,9 @@ describe('BoardCanvas', () => {
       clientY: 220 * scale,
     })
 
-    const resizedHeader = useAppStore.getState().project?.boards[0]?.components[0]
-    expect(resizedHeader?.width).not.toBe(project.boardSize.width)
-    expect(resizedHeader?.height).toBeGreaterThan(header.height)
+    const resizedLayout = useAppStore.getState().project?.boards[0]?.components[0]
+    expect(resizedLayout?.width).not.toBe(project.boardSize.width)
+    expect(resizedLayout?.height).not.toBe(layout.height)
 
     fireEvent.pointerDown(blocks[0], {
       button: 0,
@@ -867,9 +870,9 @@ describe('BoardCanvas', () => {
       clientY: 112 * scale,
     })
 
-    const movedHeader = useAppStore.getState().project?.boards[0]?.components[0]
-    expect(movedHeader?.x).not.toBe(0)
-    expect(movedHeader?.y).not.toBe(0)
+    const movedLayout = useAppStore.getState().project?.boards[0]?.components[0]
+    expect(movedLayout?.x).not.toBe(0)
+    expect(movedLayout?.y).not.toBe(0)
 
     fireEvent.pointerDown(blocks[1], {
       button: 0,
@@ -980,7 +983,7 @@ describe('BoardCanvas', () => {
     useAppStore.getState().replaceProject(project)
 
     const { container } = render(<App />)
-    const paletteButton = screen.getByRole('button', { name: /^Button$/i })
+    const paletteButton = screen.getByRole('button', { name: /^Input$/i })
     const canvas = container.querySelector('.board-canvas') as HTMLDivElement | null
 
     expect(canvas).not.toBeNull()
@@ -989,13 +992,13 @@ describe('BoardCanvas', () => {
     fireEvent.click(paletteButton)
 
     expect(paletteButton.className).toContain('is-active')
-    expect(useAppStore.getState().pendingComponentType).toBe('button')
+    expect(useAppStore.getState().pendingComponentType).toBe('input')
     expect(screen.getByRole('button', { name: '退出放置' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '退出放置' }))
     expect(useAppStore.getState().pendingComponentType).toBeNull()
 
     fireEvent.click(paletteButton)
-    expect(useAppStore.getState().pendingComponentType).toBe('button')
+    expect(useAppStore.getState().pendingComponentType).toBe('input')
     const selectedBefore = useAppStore.getState().selectedComponentId
 
     const existingBlock = container.querySelector('.wireframe-block')
@@ -1007,7 +1010,7 @@ describe('BoardCanvas', () => {
     fireEvent.click(layerItem as HTMLButtonElement)
 
     expect(paletteButton.className).toContain('is-active')
-    expect(useAppStore.getState().pendingComponentType).toBe('button')
+    expect(useAppStore.getState().pendingComponentType).toBe('input')
     expect(useAppStore.getState().selectedComponentId).toBe(selectedBefore)
   })
 
@@ -1303,7 +1306,7 @@ describe('BoardCanvas', () => {
   it('uses a consistent English label system in the side panels', () => {
     const project = createProject('测试项目', 'Desktop')
     const board = project.boards[0]
-    const component = createComponent('Button', board, project.boardSize, { x: 48, y: 48 })
+    const component = createComponent('input', board, project.boardSize, { x: 48, y: 48 })
     component.interactions.push({
       id: createId('interaction'),
       trigger: 'tap',
@@ -1338,7 +1341,7 @@ describe('BoardCanvas', () => {
     render(<App />)
 
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Primary action' } })
-    fireEvent.change(screen.getByLabelText('Attributes'), { target: { value: 'card' } })
+    fireEvent.change(screen.getByLabelText('Attributes'), { target: { value: 'content' } })
 
     const selected = useAppStore.getState().project?.boards[0]?.components[0]
     const exported = JSON.parse(useAppStore.getState().exportProjectJson()) as {
@@ -1347,8 +1350,8 @@ describe('BoardCanvas', () => {
     const exportedComponent = exported.boards[0]?.components[0]
 
     expect(selected?.description).toBe('Primary action')
-    expect(selected?.type).toBe('card')
-    expect(exportedComponent?.type).toBe('card')
+    expect(selected?.type).toBe('content')
+    expect(exportedComponent?.type).toBe('content')
     expect(exportedComponent?.info).toBe('Primary action')
     expect(exportedComponent).not.toHaveProperty('description')
   })
@@ -1356,7 +1359,7 @@ describe('BoardCanvas', () => {
   it('shows a modal description field when the interaction action is set to show modal', () => {
     const project = createProject('Test Project', 'Desktop')
     const board = project.boards[0]
-    const component = createComponent('Button', board, project.boardSize, { x: 48, y: 48 })
+    const component = createComponent('input', board, project.boardSize, { x: 48, y: 48 })
     board.components.push(component)
     useAppStore.getState().replaceProject(project)
     useAppStore.getState().selectComponent(component.id)

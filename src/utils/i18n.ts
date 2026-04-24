@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前集中管理应用双语词典、浏览器语言检测与少量文案派生
-3. 当前补入 genericBlock、组件描述、属性切换、弹窗描述、原位预览、placement/copy/export toast 与导出 JSON 备注文案
+3. 当前补入七类组件中文标签、组件描述、属性切换、弹窗描述、原位预览、placement/copy/export toast 与导出 JSON 备注文案
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -190,18 +190,22 @@ const messages = {
 
 const sectionLabels: Record<Locale, Record<ComponentSectionName, string>> = {
   en: {
-    Layout: 'Layout',
-    Content: 'Content',
-    Controls: 'Controls',
-    Elements: 'Elements',
-    Blocks: 'Blocks',
+    layout: 'Layout',
+    content: 'Content',
+    input: 'Input',
+    navigation: 'Navigation',
+    feedback: 'Feedback',
+    media: 'Media',
+    commerce: 'Commerce',
   },
   zh: {
-    Layout: '布局',
-    Content: '内容',
-    Controls: '控件',
-    Elements: '元素',
-    Blocks: '模块',
+    layout: '布局',
+    content: '内容',
+    input: '输入',
+    navigation: '导航',
+    feedback: '反馈',
+    media: '媒体',
+    commerce: '商务',
   },
 }
 
@@ -222,17 +226,22 @@ const deviceLabels: Record<Locale, Record<DevicePresetKey, string>> = {
   },
 }
 
-const componentLabels: Record<Locale, Record<ComponentType, string>> = {
-  en: {} as Record<ComponentType, string>,
+const componentLabels: Record<Locale, Partial<Record<ComponentType, string>>> = {
+  en: {},
   zh: {
-    navigation: '导航栏',
+    layout: '布局',
+    content: '内容',
+    input: '输入',
+    navigation: '导航',
+    feedback: '反馈',
+    media: '媒体',
+    commerce: '商务',
     hero: '主视觉',
     card: '卡片',
     button: '按钮',
     sidebar: '侧边栏',
     table: '表格',
     form: '表单',
-    input: '输入框',
     modal: '弹窗',
     footer: '页脚',
     avatar: '头像',
@@ -279,7 +288,7 @@ const componentLabels: Record<Locale, Record<ComponentType, string>> = {
     logo: '标识',
     faq: '常见问题',
     gallery: '图库',
-    genericBlock: '通用块',
+    genericBlock: '布局',
     checkbox: '复选框',
     radio: '单选框',
     slider: '滑块',

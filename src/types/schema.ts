@@ -1,8 +1,8 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前同时承接 source 小写组件目录、浏览器派生 locale 与现有旧组件类型，并收敛为单一 wireframe 工作态
-3. 当前补入 genericBlock 组件类型，并为导出结构补充 clipped 及 clipped/手绘容差/禁 emoji 三类 _instructions；组件内部可存 description，导出时映射为 info
+2. 当前活跃组件类型收敛为 layout、content、input、navigation、feedback、media、commerce
+3. 当前保留旧导入组件类型，并为导出结构补充 clipped 及 clipped/手绘容差/禁 emoji 三类 _instructions；组件内部可存 description，导出时映射为 info
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -10,15 +10,22 @@ export type DevicePreset = 'iPhone' | 'Android' | 'iPad' | 'Desktop' | 'Custom'
 export type DevicePresetKey = DevicePreset
 export type Locale = 'en' | 'zh'
 
-export type ComponentType =
+export type ActiveComponentType =
+  | 'layout'
+  | 'content'
+  | 'input'
   | 'navigation'
+  | 'feedback'
+  | 'media'
+  | 'commerce'
+
+export type LegacyComponentType =
   | 'hero'
   | 'card'
   | 'button'
   | 'sidebar'
   | 'table'
   | 'form'
-  | 'input'
   | 'modal'
   | 'footer'
   | 'avatar'
@@ -91,10 +98,12 @@ export type ComponentType =
   | 'Icon'
   | 'Modal'
 
-export type ComponentSectionName = 'Layout' | 'Content' | 'Controls' | 'Elements' | 'Blocks'
+export type ComponentType = ActiveComponentType | LegacyComponentType
+
+export type ComponentSectionName = ActiveComponentType
 
 export interface ComponentCatalogItem {
-  type: ComponentType
+  type: ActiveComponentType
   label: string
   width: number
   height: number
