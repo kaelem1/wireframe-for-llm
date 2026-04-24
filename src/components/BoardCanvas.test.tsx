@@ -249,11 +249,18 @@ describe('BoardCanvas', () => {
     const project = createProject('Test Project', 'Desktop')
     useAppStore.getState().replaceProject(project)
 
-    render(<BoardCanvas />)
+    const { container } = render(<BoardCanvas />)
+    const emptyState = container.querySelector('.canvas-empty-state') as HTMLDivElement | null
+    const emptyStateRule = appStyles.match(/\.canvas-empty-state\s*\{[^}]*\}/)?.[0] ?? ''
 
     expect(screen.getByText('Select a component, then drag/click to place it.')).toBeTruthy()
     expect(screen.queryByText('New Page')).toBeNull()
     expect(screen.queryByText('Pick a component and click or drag on canvas.')).toBeNull()
+    expect(emptyState?.style.transform).toBe('translate(-50%, -50%) scale(2)')
+    expect(emptyStateRule).toContain('padding: 14px;')
+    expect(emptyStateRule).toContain('border-radius: 10px;')
+    expect(emptyStateRule).toContain('font-size: 14px;')
+    expect(emptyStateRule).toContain('line-height: 1.45;')
   })
 
   it('renders export, copy, and GitHub buttons in the action row and keeps actions working', async () => {

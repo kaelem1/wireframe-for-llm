@@ -10,7 +10,8 @@
 8. 图层列表项左侧补入轻量拖拽 grip 提示，整行仍保持可拖拽排序
 9. setup 首屏全视口居中，右栏导出区固定 60px，画板菜单脱离滚动列表裁切
 10. workspace center 不保留外层 padding，canvas stage 收缩到 contain 后画板尺寸且无外壳视觉
-11. 更新后检查所属 `.folder.md`
+11. canvas empty state 反向缩放，保持屏幕尺寸固定
+12. 更新后检查所属 `.folder.md`
 */
 
 :root {
@@ -481,12 +482,15 @@ body {
   gap: 8px;
   width: min(360px, calc(100% - 64px));
   transform: translate(-50%, -50%);
-  padding: 18px;
-  border: 1px dashed rgba(183, 148, 119, 0.42);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.82);
+  transform-origin: center;
+  padding: 14px;
+  border: 1px dashed rgba(183, 148, 119, 0.36);
+  border-radius: 10px;
+  background: rgba(244, 245, 247, 0.82);
   text-align: center;
-  color: #5b4437;
+  color: #7a6455;
+  font-size: 14px;
+  line-height: 1.45;
   backdrop-filter: blur(10px);
   pointer-events: none;
 }

@@ -7,7 +7,8 @@
 5. 拖动与缩放改为本地预览，松手一次性提交历史，避免 undo 按轨迹回放
 6. 待放置期间屏蔽其他图层的选中与拖拽入口，并将新建图层切到无圆点的锁定高亮
 7. 画板按 contain 比例完整显示，stage 收缩到缩放后画板尺寸
-8. 更新后检查所属 `.folder.md`
+8. 空画布提示用反向缩放保持屏幕尺寸固定
+9. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
@@ -624,6 +625,7 @@ export function BoardCanvas() {
   }
 
   const scale = fitScale
+  const emptyStateScale = scale === 0 ? 1 : 1 / scale
   const scaledBoardWidth = project.boardSize.width * scale
   const scaledBoardHeight = project.boardSize.height * scale
 
@@ -787,7 +789,12 @@ export function BoardCanvas() {
             }}
           >
             {board.components.length === 0 ? (
-              <div className="canvas-empty-state">
+              <div
+                className="canvas-empty-state"
+                style={{
+                  transform: `translate(-50%, -50%) scale(${emptyStateScale})`,
+                }}
+              >
                 <span>{t(locale, 'clickToPlace')}</span>
               </div>
             ) : null}
