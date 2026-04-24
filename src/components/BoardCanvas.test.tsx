@@ -4,7 +4,8 @@
 1. 逻辑变更后更新此 Header
 2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示与拖拽 grip 提示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
 3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转、拖动一次性 undo 与放置锁定选中态的回归
-4. 更新后检查所属 `.folder.md`
+4. 覆盖 setup 弹层居中、导出操作区 60px 高度、GitHub 60px 方形入口与画板菜单提层
+5. 更新后检查所属 `.folder.md`
 */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -16,6 +17,7 @@ import { BoardCanvas } from './BoardCanvas'
 import { BoardStrip } from './BoardStrip'
 import { ComponentPalette } from './ComponentPalette'
 import { InteractionPanel } from './InteractionPanel'
+import { SetupDialog } from './SetupDialog'
 import { useAppStore } from '../stores/appStore'
 import { createBoard, createComponent, createProject, createId } from '../utils/project'
 
@@ -135,6 +137,21 @@ describe('BoardCanvas', () => {
     expect(screen.getByRole('heading', { name: 'New Project' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Create Project' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '新建项目' })).toBeNull()
+  })
+
+  it('centers the setup dialog in the full viewport', () => {
+    const { container } = render(<SetupDialog onCreate={vi.fn()} />)
+    const setupScreen = container.querySelector('.setup-screen')
+    const dialog = setupScreen?.querySelector('.dialog')
+    const setupRule = appStyles.match(/\.setup-screen\s*\{[^}]*\}/)?.[0] ?? ''
+
+    expect(setupScreen).not.toBeNull()
+    expect(dialog).not.toBeNull()
+    expect(setupRule).toContain('min-height: 100vh;')
+    expect(setupRule).toContain('width: 100vw;')
+    expect(setupRule).toContain('display: flex;')
+    expect(setupRule).toContain('align-items: center;')
+    expect(setupRule).toContain('justify-content: center;')
   })
 
   it('keeps component palette scrollable within the left sidebar', () => {
@@ -259,6 +276,7 @@ describe('BoardCanvas', () => {
     const copyButton = screen.getByRole('button', { name: 'Copy JSON' })
     const githubButton = screen.getByRole('button', { name: 'GitHub' })
     const buttonGroup = container.querySelector('.panel__export-actions')
+    const actionsRule = appStyles.match(/\.panel__export-actions\s*\{[^}]*\}/)?.[0] ?? ''
     const exportRule = appStyles.match(/\.panel__export-button\s*\{[^}]*\}/)?.[0] ?? ''
     const copyRule = appStyles.match(/\.panel__copy-button\s*\{[^}]*\}/)?.[0] ?? ''
     const exportPrimaryRule = appStyles.match(/\.panel__export-button--primary\s*\{[^}]*\}/)?.[0] ?? ''
@@ -270,9 +288,12 @@ describe('BoardCanvas', () => {
     expect(buttonGroup?.children[1]).toBe(copyButton)
     expect(buttonGroup?.children[2]).toBe(githubButton)
     expect(exportButton.className).toContain('panel__export-button--primary')
+    expect(actionsRule).toContain('height: 60px;')
     expect(exportRule).toContain('flex: 2;')
     expect(copyRule).toContain('flex: 1;')
-    expect(githubRule).toContain('flex: 0 0 72px;')
+    expect(githubRule).toContain('flex: 0 0 60px;')
+    expect(githubRule).toContain('width: 60px;')
+    expect(githubRule).toContain('height: 60px;')
     expect(githubButton.querySelector('svg')).not.toBeNull()
     expect(exportPrimaryRule).toContain('background: #5a3e31;')
     expect(exportPrimaryRule).toContain('color: #fff;')
@@ -1070,16 +1091,20 @@ describe('BoardCanvas', () => {
     useAppStore.getState().replaceProject(project)
 
     const { container } = render(<BoardStrip />)
+    const moreButton = container.querySelector('.board-chip__more')
 
-    fireEvent.click(screen.getByRole('button', { name: /More actions for Home|更多首页/ }))
+    expect(moreButton).not.toBeNull()
+    fireEvent.click(moreButton as Element)
 
     const stripRule = appStyles.match(/\.board-strip\s*\{[^}]*\}/)?.[0] ?? ''
     const stripListRule = appStyles.match(/\.board-strip__list\s*\{[^}]*\}/)?.[0] ?? ''
     const popoverRule = appStyles.match(/\.board-chip__menu-popover\s*\{[^}]*\}/)?.[0] ?? ''
     const directPopover = container.querySelector('.board-strip > .board-chip__menu-popover')
+    const openChip = container.querySelector('.board-chip.is-active.is-menu-open')
 
     expect(screen.getByRole('button', { name: /Create Copy|创建副本/ })).toBeTruthy()
     expect(directPopover).not.toBeNull()
+    expect(openChip).not.toBeNull()
     expect(stripRule).toContain('overflow: visible;')
     expect(stripRule).toContain('position: relative;')
     expect(stripListRule).toContain('overflow-x: auto;')

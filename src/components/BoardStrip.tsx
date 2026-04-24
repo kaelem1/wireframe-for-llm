@@ -2,10 +2,11 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前画板按钮将删除收进“更多”菜单，并支持整板创建副本
-3. 更新后检查所属 `.folder.md`
+3. 画板更多菜单提升到 `.board-strip` 直系绝对定位层，避免被横向滚动列表裁切
+4. 更新后检查所属 `.folder.md`
 */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
 
 export function BoardStrip() {
@@ -17,19 +18,26 @@ export function BoardStrip() {
   const deleteBoard = useAppStore((state) => state.deleteBoard)
   const reorderBoards = useAppStore((state) => state.reorderBoards)
   const updateBoardName = useAppStore((state) => state.updateBoardName)
-  const [menuBoardId, setMenuBoardId] = useState<string | null>(null)
+  const stripRef = useRef<HTMLDivElement | null>(null)
+  const [menuAnchor, setMenuAnchor] = useState<{ boardId: string; left: number; bottom: number } | null>(null)
 
   if (!project) {
     return null
   }
 
   return (
-    <div className="board-strip">
+    <div ref={stripRef} className="board-strip">
       <div className="board-strip__list">
         {project.boards.map((board, index) => (
           <div
             key={board.id}
-            className={board.id === activeBoardId ? 'board-chip is-active' : 'board-chip'}
+            className={[
+              'board-chip',
+              board.id === activeBoardId ? 'is-active' : '',
+              menuAnchor?.boardId === board.id ? 'is-menu-open' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             draggable
             onDragStart={(event) => {
               event.dataTransfer.setData('application/x-board-index', String(index))
@@ -54,37 +62,53 @@ export function BoardStrip() {
               <button
                 type="button"
                 className="board-chip__more"
-                onClick={() => setMenuBoardId(menuBoardId === board.id ? null : board.id)}
+                onClick={(event) => {
+                  if (menuAnchor?.boardId === board.id) {
+                    setMenuAnchor(null)
+                    return
+                  }
+
+                  const stripRect = stripRef.current!.getBoundingClientRect()
+                  const buttonRect = event.currentTarget.getBoundingClientRect()
+                  setMenuAnchor({
+                    boardId: board.id,
+                    left: buttonRect.right - stripRect.left,
+                    bottom: stripRect.bottom - buttonRect.top + 6,
+                  })
+                }}
                 aria-label={`更多${board.name}`}
               >
                 更多
               </button>
-              {menuBoardId === board.id ? (
-                <div className="board-chip__menu-popover">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      duplicateBoard(board.id)
-                      setMenuBoardId(null)
-                    }}
-                  >
-                    创建副本
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      deleteBoard(board.id)
-                      setMenuBoardId(null)
-                    }}
-                  >
-                    删除
-                  </button>
-                </div>
-              ) : null}
             </div>
           </div>
         ))}
       </div>
+      {menuAnchor ? (
+        <div
+          className="board-chip__menu-popover"
+          style={{ left: menuAnchor.left, bottom: menuAnchor.bottom }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              duplicateBoard(menuAnchor.boardId)
+              setMenuAnchor(null)
+            }}
+          >
+            创建副本
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              deleteBoard(menuAnchor.boardId)
+              setMenuAnchor(null)
+            }}
+          >
+            删除
+          </button>
+        </div>
+      ) : null}
       <button type="button" className="board-strip__add" onClick={addBoard}>
         + 新建画板
       </button>

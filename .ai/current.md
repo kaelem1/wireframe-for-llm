@@ -1,1 +1,1 @@
-已为右栏图层项补入左侧轻量拖拽 grip，继续保持整行可拖拽排序；`npm run build` 已通过，`vitest` 仍缺 DOM 环境配置而无法直接跑通。
+已修复 setup 居中、右栏 60px 导出区、GitHub 60×60 入口与画板菜单裁切；相关 Vitest 用例和 `npm run build` 已通过。

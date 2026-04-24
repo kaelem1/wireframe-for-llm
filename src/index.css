@@ -8,7 +8,8 @@
 6. workspace 底部 toast 采用悬浮胶囊样式，复制成功提示复用同一视觉并切为只读状态
 7. 待放置期间新建图层改用深色锁定高亮，不再显示普通选中外框与缩放圆点
 8. 图层列表项左侧补入轻量拖拽 grip 提示，整行仍保持可拖拽排序
-9. 更新后检查所属 `.folder.md`
+9. setup 首屏全视口居中，右栏导出区固定 60px，画板菜单脱离滚动列表裁切
+10. 更新后检查所属 `.folder.md`
 */
 
 :root {
@@ -313,6 +314,14 @@ body {
 .panel__export-actions {
   display: flex;
   gap: 6px;
+  height: 60px;
+  align-items: stretch;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.panel__export-actions .ghost-button:hover {
+  transform: none;
 }
 
 .panel__export-button {
@@ -329,11 +338,13 @@ body {
 }
 
 .panel__github-button {
-  flex: 0 0 72px;
+  flex: 0 0 60px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding-inline: 0;
+  width: 60px;
+  height: 60px;
+  padding: 0;
 }
 
 .panel__github-button svg {
@@ -700,6 +711,14 @@ body {
   box-shadow: inset 0 1px 1px rgba(92, 61, 38, 0.02);
 }
 
+.form-field input:focus-visible,
+.form-field textarea:focus-visible,
+.form-field select:focus-visible {
+  outline: 0;
+  border-color: rgba(139, 92, 60, 0.64);
+  box-shadow: inset 0 0 0 1px rgba(139, 92, 60, 0.48);
+}
+
 .interaction-list {
   display: grid;
   gap: 8px;
@@ -779,6 +798,7 @@ body {
 
 .board-strip {
   position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -863,6 +883,7 @@ body {
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 10px 20px rgba(92, 61, 38, 0.1);
+  transform: translateX(-100%);
 }
 
 .board-chip__menu-popover button {
@@ -929,6 +950,16 @@ body {
 .form-error {
   color: #dc2626;
   font-size: 14px;
+}
+
+.setup-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  min-height: 100vh;
+  padding: 20px;
+  overflow: auto;
 }
 
 .setup-screen__device-grid {
