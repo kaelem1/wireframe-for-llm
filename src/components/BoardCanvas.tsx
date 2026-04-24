@@ -6,7 +6,7 @@
 4. 当前支持 Option/Alt 拖拽复制所选组件与越界移动缩放
 5. 拖动与缩放改为本地预览，松手一次性提交历史，避免 undo 按轨迹回放
 6. 待放置期间屏蔽其他图层的选中与拖拽入口，并将新建图层切到无圆点的锁定高亮
-7. stage viewport 填满画布容器，缩放后画板尺寸只作为最小滚动尺寸
+7. 画板按 cover 比例铺满 stage，超出方向滚动，不保留非画板空白
 8. 更新后检查所属 `.folder.md`
 */
 
@@ -760,8 +760,8 @@ export function BoardCanvas() {
             className="board-canvas board-canvas--wireframe"
             style={{
               position: 'absolute',
-              left: `calc(50% - ${scaledBoardWidth / 2}px)`,
-              top: `calc(50% - ${scaledBoardHeight / 2}px)`,
+              left: 0,
+              top: 0,
               width: project.boardSize.width,
               height: project.boardSize.height,
               transform: `scale(${scale})`,

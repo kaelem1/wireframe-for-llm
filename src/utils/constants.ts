@@ -4,7 +4,8 @@
 2. 当前补齐了参考仓 wireframe 组件注册表，默认共享文案切到英文基线，并移除独立 wireframe 模式参数
 3. 当前补入“通用块”占位组件，默认弱语义、强命名
 4. 用户创建路径不再暴露 modal 组件类型，弹窗能力收敛到交互
-5. 更新后检查所属 `.folder.md`
+5. 画布缩放不再使用额外 stage padding 常量
+6. 更新后检查所属 `.folder.md`
 */
 
 import type {
@@ -83,7 +84,6 @@ function toMeta(section: ComponentSectionName, item: ComponentSeed): ComponentMe
 export const GRID_SIZE = 8
 export const STORAGE_KEY = 'wireframe-proto-state'
 export const LOCAL_STORAGE_KEY = STORAGE_KEY
-export const BOARD_STAGE_PADDING = 48
 export const PLACEMENT_DRAG_THRESHOLD = 4
 export const DEFAULT_AI_BASE_URL = 'https://api.siliconflow.cn/v1'
 export const DEFAULT_AI_MODEL = 'zai-org/GLM-4.6'

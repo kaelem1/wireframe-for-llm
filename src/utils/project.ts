@@ -1,7 +1,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前包含项目导出扩展、双语命名辅助、fit 缩放与放置/命名辅助
+2. 当前包含项目导出扩展、双语命名辅助、cover 缩放与放置/命名辅助
 3. 组件归一化仅做最小尺寸约束，不再锁死边界位置或尺寸
 4. 组件复制支持可控偏移，供粘贴与 Option 拖拽复用
 5. 导出 JSON 会为越界组件补 clipped，并写入 clipped/手绘容差/禁 emoji 三类 _instructions；组件描述会映射为 info
@@ -10,7 +10,6 @@
 */
 
 import {
-  BOARD_STAGE_PADDING,
   COMPONENT_META_MAP,
   DEFAULT_AI_BASE_URL,
   DEFAULT_AI_MODEL,
@@ -61,14 +60,7 @@ export function clamp(value: number, min: number, max: number) {
 }
 
 export function getBoardFitScale(boardSize: BoardSize, stageWidth: number, stageHeight: number) {
-  const availableWidth = Math.max(stageWidth - BOARD_STAGE_PADDING, 0)
-  const availableHeight = Math.max(stageHeight - BOARD_STAGE_PADDING, 0)
-
-  return Math.min(
-    1,
-    availableWidth / boardSize.width,
-    availableHeight / boardSize.height,
-  )
+  return Math.max(stageWidth / boardSize.width, stageHeight / boardSize.height)
 }
 
 export function getDeviceSize(device: DevicePreset, custom?: BoardSize) {

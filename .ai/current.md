@@ -1,1 +1,1 @@
-已将 canvas viewport 改为满铺画布容器，画板居中且保留最小滚动尺寸；相关 Vitest 与 build 通过，完整测试仍有既有文案断言失败。
+已将画布缩放改为 cover：board-canvas 直接铺满 canvas stage，超出方向滚动；目标 Vitest 与 build 已通过。
