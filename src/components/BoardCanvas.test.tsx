@@ -5,7 +5,7 @@
 2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示与拖拽 grip 提示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
 3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转、拖动一次性 undo 与放置锁定选中态的回归
 4. 覆盖 setup 弹层居中、导出操作区 60px 高度、GitHub 60px 方形入口与画板菜单提层
-5. 覆盖 canvas stage 完整显示画板
+5. 覆盖 canvas stage 完整显示画板且无外壳视觉
 6. 更新后检查所属 `.folder.md`
 */
 
@@ -55,7 +55,7 @@ beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
     configurable: true,
     get() {
-      if (this.classList.contains('canvas-stage')) {
+      if (this.classList.contains('canvas-shell')) {
         return 720
       }
       if (this.classList.contains('preview-overlay__stage')) {
@@ -67,7 +67,7 @@ beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
     configurable: true,
     get() {
-      if (this.classList.contains('canvas-stage')) {
+      if (this.classList.contains('canvas-shell')) {
         return 560
       }
       if (this.classList.contains('preview-overlay__stage')) {
@@ -867,11 +867,12 @@ describe('BoardCanvas', () => {
     expect(movedNavigation?.y).not.toBe(0)
   })
 
-  it('fits the full board inside the canvas stage and removes manual zoom controls', () => {
+  it('fits the full board without canvas stage outer chrome and removes manual zoom controls', () => {
     const project = createProject('测试项目', 'Desktop')
     useAppStore.getState().replaceProject(project)
 
     const { container } = render(<BoardCanvas />)
+    const stage = container.querySelector('.canvas-stage') as HTMLDivElement | null
     const viewport = container.querySelector('.canvas-stage__viewport') as HTMLDivElement | null
     const canvas = container.querySelector('.board-canvas') as HTMLDivElement | null
     const stageRule = appStyles.match(/\.canvas-stage\s*\{[^}]*\}/)?.[0] ?? ''
@@ -881,9 +882,17 @@ describe('BoardCanvas', () => {
     expect(screen.queryByLabelText('放大画板')).toBeNull()
     expect(screen.queryByLabelText('当前画板缩放')).toBeNull()
     expect(stageRule).toContain('padding: 0;')
+    expect(stageRule).toContain('flex: 0 0 auto;')
     expect(stageRule).toContain('align-items: center;')
     expect(stageRule).toContain('justify-content: center;')
+    expect(stageRule).toContain('overflow: hidden;')
+    expect(stageRule).toContain('border: 0;')
+    expect(stageRule).toContain('border-radius: 0;')
+    expect(stageRule).toContain('background: transparent;')
+    expect(stageRule).toContain('box-shadow: none;')
     expect(viewportRule).toContain('flex: 0 0 auto;')
+    expect(stage?.style.width).toBe('720px')
+    expect(stage?.style.height).toBe('450px')
     expect(viewport?.style.width).toBe('720px')
     expect(viewport?.style.height).toBe('450px')
     expect(viewport?.style.minWidth).toBe('')

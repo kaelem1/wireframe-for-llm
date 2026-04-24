@@ -6,7 +6,7 @@
 4. 当前支持 Option/Alt 拖拽复制所选组件与越界移动缩放
 5. 拖动与缩放改为本地预览，松手一次性提交历史，避免 undo 按轨迹回放
 6. 待放置期间屏蔽其他图层的选中与拖拽入口，并将新建图层切到无圆点的锁定高亮
-7. 画板按 contain 比例完整显示在 stage 中间
+7. 画板按 contain 比例完整显示，stage 收缩到缩放后画板尺寸
 8. 更新后检查所属 `.folder.md`
 */
 
@@ -364,7 +364,7 @@ export function BoardCanvas() {
   const [selectionDraft, setSelectionDraft] = useState<PlacementDraft | null>(null)
   const [transformSession, setTransformSession] = useState<TransformSession | null>(null)
   const [transformPreview, setTransformPreview] = useState<TransformPreview | null>(null)
-  const stageRef = useRef<HTMLDivElement>(null)
+  const shellRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
   const placementSessionRef = useRef<PlacementSession | null>(null)
   const placementDraftRef = useRef<PlacementDraft | null>(null)
@@ -407,17 +407,17 @@ export function BoardCanvas() {
     }
 
     const updateFitScale = () => {
-      const stage = stageRef.current
-      if (!stage) {
+      const shell = shellRef.current
+      if (!shell) {
         return
       }
-      setFitScale(getBoardFitScale(project.boardSize, stage.clientWidth, stage.clientHeight))
+      setFitScale(getBoardFitScale(project.boardSize, shell.clientWidth, shell.clientHeight))
     }
 
     updateFitScale()
     const observer = new ResizeObserver(updateFitScale)
-    if (stageRef.current) {
-      observer.observe(stageRef.current)
+    if (shellRef.current) {
+      observer.observe(shellRef.current)
     }
 
     return () => observer.disconnect()
@@ -746,8 +746,14 @@ export function BoardCanvas() {
   }
 
   return (
-    <div className="canvas-shell">
-      <div className="canvas-stage" ref={stageRef}>
+    <div className="canvas-shell" ref={shellRef}>
+      <div
+        className="canvas-stage"
+        style={{
+          width: scaledBoardWidth,
+          height: scaledBoardHeight,
+        }}
+      >
         <div
           className="canvas-stage__viewport"
           style={{
