@@ -6,7 +6,8 @@
 4. 当前支持 Option/Alt 拖拽复制所选组件与越界移动缩放
 5. 拖动与缩放改为本地预览，松手一次性提交历史，避免 undo 按轨迹回放
 6. 待放置期间屏蔽其他图层的选中与拖拽入口，并将新建图层切到无圆点的锁定高亮
-7. 更新后检查所属 `.folder.md`
+7. stage viewport 填满画布容器，缩放后画板尺寸只作为最小滚动尺寸
+8. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
@@ -623,6 +624,8 @@ export function BoardCanvas() {
   }
 
   const scale = fitScale
+  const scaledBoardWidth = project.boardSize.width * scale
+  const scaledBoardHeight = project.boardSize.height * scale
 
   const startPlacement = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || !pendingComponentType) {
@@ -748,14 +751,17 @@ export function BoardCanvas() {
         <div
           className="canvas-stage__viewport"
           style={{
-            width: project.boardSize.width * scale,
-            height: project.boardSize.height * scale,
+            minWidth: scaledBoardWidth,
+            minHeight: scaledBoardHeight,
           }}
         >
           <div
             ref={boardRef}
             className="board-canvas board-canvas--wireframe"
             style={{
+              position: 'absolute',
+              left: `calc(50% - ${scaledBoardWidth / 2}px)`,
+              top: `calc(50% - ${scaledBoardHeight / 2}px)`,
               width: project.boardSize.width,
               height: project.boardSize.height,
               transform: `scale(${scale})`,

@@ -1,1 +1,1 @@
-已修复 setup 居中、右栏 60px 导出区、GitHub 60×60 入口与画板菜单裁切；相关 Vitest 用例和 `npm run build` 已通过。
+已将 canvas viewport 改为满铺画布容器，画板居中且保留最小滚动尺寸；相关 Vitest 与 build 通过，完整测试仍有既有文案断言失败。

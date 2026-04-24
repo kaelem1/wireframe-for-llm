@@ -5,7 +5,8 @@
 2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示与拖拽 grip 提示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
 3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转、拖动一次性 undo 与放置锁定选中态的回归
 4. 覆盖 setup 弹层居中、导出操作区 60px 高度、GitHub 60px 方形入口与画板菜单提层
-5. 更新后检查所属 `.folder.md`
+5. 覆盖 canvas stage viewport 填满画布容器
+6. 更新后检查所属 `.folder.md`
 */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -855,11 +856,21 @@ describe('BoardCanvas', () => {
     useAppStore.getState().replaceProject(project)
 
     const { container } = render(<BoardCanvas />)
+    const viewport = container.querySelector('.canvas-stage__viewport') as HTMLDivElement | null
     const canvas = container.querySelector('.board-canvas') as HTMLDivElement | null
+    const viewportRule = appStyles.match(/\.canvas-stage__viewport\s*\{[^}]*\}/)?.[0] ?? ''
 
     expect(screen.queryByLabelText('缩小画板')).toBeNull()
     expect(screen.queryByLabelText('放大画板')).toBeNull()
     expect(screen.queryByLabelText('当前画板缩放')).toBeNull()
+    expect(viewportRule).toContain('width: 100%;')
+    expect(viewportRule).toContain('height: 100%;')
+    expect(viewport?.style.width).toBe('')
+    expect(viewport?.style.height).toBe('')
+    expect(viewport?.style.minWidth).toBe('672px')
+    expect(viewport?.style.minHeight).toBe('420px')
+    expect(canvas?.style.left).toBe('calc(50% - 336px)')
+    expect(canvas?.style.top).toBe('calc(50% - 210px)')
     expect(canvas?.style.transform).toBe('scale(0.4666666666666667)')
     expect(container.querySelector('.canvas-zoom')).toBeNull()
   })
