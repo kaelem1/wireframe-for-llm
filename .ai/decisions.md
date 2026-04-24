@@ -8,3 +8,4 @@
 手绘线框导出与 AI 还原都以结构、信息架构、交互为先，坐标尺寸只作近似参考；输出界面禁止 emoji。
 仓库根固定为当前项目目录，不再挂在父级 `dev` 树下；本地工作分支固定为 `wireframe-for-llm`。
 生产构建的 `tsconfig.app.json` 排除 `*.test.*` 和旧 `PreviewOverlay.tsx`，测试与旧预览文件保留在 `src/` 但不进 Vercel build。
+画布缩放优先完整显示：使用 contain 居中，不用 cover 铺满造成横向或纵向滚动。

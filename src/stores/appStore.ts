@@ -9,7 +9,8 @@
 7. preview 特性已删除，不再维护 preview 状态
 8. 待放置期间禁用其他图层选中入口
 9. 当前支持组件 description 与 type 原位编辑
-9. 更新后检查所属 `.folder.md`
+10. 项目名编辑允许临时空值，默认名只在创建等边界入口兜底
+11. 更新后检查所属 `.folder.md`
 */
 
 import { applyPatches, enablePatches, produceWithPatches, type Patch } from 'immer'
@@ -298,7 +299,7 @@ export const useAppStore = create<StoreState>((set, get) => {
     setProjectName: (name) =>
       commit((draft) => {
         if (draft.project) {
-          draft.project.project = name || DEFAULT_PROJECT_NAME
+          draft.project.project = name
         }
       }),
     setActiveBoardId: (boardId) =>

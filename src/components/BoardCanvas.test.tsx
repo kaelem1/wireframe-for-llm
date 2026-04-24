@@ -5,7 +5,7 @@
 2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、通用块置顶独立、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层主名称展示与拖拽 grip 提示、通用块创建、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
 3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转、拖动一次性 undo 与放置锁定选中态的回归
 4. 覆盖 setup 弹层居中、导出操作区 60px 高度、GitHub 60px 方形入口与画板菜单提层
-5. 覆盖 canvas stage 由画板 cover 铺满
+5. 覆盖 canvas stage 完整显示画板
 6. 更新后检查所属 `.folder.md`
 */
 
@@ -202,6 +202,22 @@ describe('BoardCanvas', () => {
     expect(firstSectionButtons).toHaveLength(1)
     expect(firstSectionButtons?.[0]?.textContent).toBe('Generic Block')
     expect(laterSectionText).toBe(false)
+  })
+
+  it('keeps the project name editable when cleared', () => {
+    const project = createProject('Test Project', 'Desktop')
+    useAppStore.getState().replaceProject(project)
+
+    render(<ComponentPalette />)
+    const input = screen.getByLabelText('Project Name') as HTMLInputElement
+
+    fireEvent.change(input, { target: { value: 'T' } })
+    expect(input.value).toBe('T')
+    expect(useAppStore.getState().project?.project).toBe('T')
+
+    fireEvent.change(input, { target: { value: '' } })
+    expect(input.value).toBe('')
+    expect(useAppStore.getState().project?.project).toBe('')
   })
 
   it('uses the same title structure for interactions and layers', () => {
@@ -851,7 +867,7 @@ describe('BoardCanvas', () => {
     expect(movedNavigation?.y).not.toBe(0)
   })
 
-  it('covers the canvas stage with the board and removes manual zoom controls', () => {
+  it('fits the full board inside the canvas stage and removes manual zoom controls', () => {
     const project = createProject('测试项目', 'Desktop')
     useAppStore.getState().replaceProject(project)
 
@@ -865,15 +881,16 @@ describe('BoardCanvas', () => {
     expect(screen.queryByLabelText('放大画板')).toBeNull()
     expect(screen.queryByLabelText('当前画板缩放')).toBeNull()
     expect(stageRule).toContain('padding: 0;')
-    expect(viewportRule).toContain('width: 100%;')
-    expect(viewportRule).toContain('height: 100%;')
-    expect(viewport?.style.width).toBe('')
-    expect(viewport?.style.height).toBe('')
-    expect(viewport?.style.minWidth).toBe('896px')
-    expect(viewport?.style.minHeight).toBe('560px')
+    expect(stageRule).toContain('align-items: center;')
+    expect(stageRule).toContain('justify-content: center;')
+    expect(viewportRule).toContain('flex: 0 0 auto;')
+    expect(viewport?.style.width).toBe('720px')
+    expect(viewport?.style.height).toBe('450px')
+    expect(viewport?.style.minWidth).toBe('')
+    expect(viewport?.style.minHeight).toBe('')
     expect(canvas?.style.left).toBe('0px')
     expect(canvas?.style.top).toBe('0px')
-    expect(canvas?.style.transform).toBe('scale(0.6222222222222222)')
+    expect(canvas?.style.transform).toBe('scale(0.5)')
     expect(container.querySelector('.canvas-zoom')).toBeNull()
   })
 
