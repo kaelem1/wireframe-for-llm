@@ -5,7 +5,7 @@
 2. 当前覆盖浏览器语言自动检测、无手动语言入口、无旧 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、左上角浮动项目名、顶部居中悬浮组件工具栏、无左栏 sidebar、七类组件入口、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层名草稿编辑、图层主名称展示与拖拽 grip 提示、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
 3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转、拖动一次性 undo 与放置锁定选中态的回归
 4. 覆盖 setup 弹层居中、导出操作区 60px 高度、GitHub 60px 方形入口与画板菜单提层
-5. 覆盖 canvas stage 完整显示画板且无外壳视觉，并验证左下角 100% 手动缩放控件
+5. 覆盖 canvas stage 完整显示画板且无外壳视觉，并验证左下角 80% 手动缩放控件
 6. 更新后检查所属 `.folder.md`
 */
 
@@ -269,7 +269,7 @@ describe('BoardCanvas', () => {
     expect(screen.getByText('Select a component, then drag/click to place it.')).toBeTruthy()
     expect(screen.queryByText('New Page')).toBeNull()
     expect(screen.queryByText('Pick a component and click or drag on canvas.')).toBeNull()
-    expect(emptyState?.style.transform).toBe('translate(-50%, -50%) scale(2)')
+    expect(emptyState?.style.transform).toBe('translate(-50%, -50%) scale(2.5)')
     expect(emptyStateRule).toContain('padding: 14px;')
     expect(emptyStateRule).toContain('border-radius: 10px;')
     expect(emptyStateRule).toContain('font-size: 14px;')
@@ -937,7 +937,7 @@ describe('BoardCanvas', () => {
     expect(screen.getByLabelText('Zoom out canvas')).toBeTruthy()
     expect(screen.getByLabelText('Zoom in canvas')).toBeTruthy()
     expect(screen.getByLabelText('Current canvas zoom')).toBeTruthy()
-    expect(screen.getByText('100%')).toBeTruthy()
+    expect(screen.getByText('80%')).toBeTruthy()
     expect(stageRule).toContain('padding: 0;')
     expect(stageRule).toContain('flex: 0 0 auto;')
     expect(stageRule).toContain('align-items: center;')
@@ -948,25 +948,25 @@ describe('BoardCanvas', () => {
     expect(stageRule).toContain('background: transparent;')
     expect(stageRule).toContain('box-shadow: none;')
     expect(viewportRule).toContain('flex: 0 0 auto;')
-    expect(stage?.style.width).toBe('720px')
-    expect(stage?.style.height).toBe('450px')
-    expect(viewport?.style.width).toBe('720px')
-    expect(viewport?.style.height).toBe('450px')
+    expect(stage?.style.width).toBe('576px')
+    expect(stage?.style.height).toBe('360px')
+    expect(viewport?.style.width).toBe('576px')
+    expect(viewport?.style.height).toBe('360px')
     expect(viewport?.style.minWidth).toBe('')
     expect(viewport?.style.minHeight).toBe('')
     expect(canvas?.style.left).toBe('0px')
     expect(canvas?.style.top).toBe('0px')
-    expect(canvas?.style.transform).toBe('scale(0.5)')
+    expect(canvas?.style.transform).toBe('scale(0.4)')
     expect(container.querySelector('.canvas-zoom')).not.toBeNull()
 
     fireEvent.click(screen.getByLabelText('Zoom in canvas'))
 
-    expect(screen.getByText('110%')).toBeTruthy()
-    expect(stage?.style.width).toBe('792px')
-    expect(stage?.style.height).toBe('495px')
-    expect(viewport?.style.width).toBe('792px')
-    expect(viewport?.style.height).toBe('495px')
-    expect(canvas?.style.transform).toBe('scale(0.55)')
+    expect(screen.getByText('90%')).toBeTruthy()
+    expect(stage?.style.width).toBe('648px')
+    expect(stage?.style.height).toBe('405px')
+    expect(viewport?.style.width).toBe('648px')
+    expect(viewport?.style.height).toBe('405px')
+    expect(canvas?.style.transform).toBe('scale(0.45)')
   })
 
   it('keeps a component selected after clicking it', () => {

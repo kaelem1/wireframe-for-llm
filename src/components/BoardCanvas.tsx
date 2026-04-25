@@ -8,7 +8,7 @@
 6. 待放置期间屏蔽其他图层的选中与拖拽入口，并将新建图层切到无圆点的锁定高亮
 7. 画板按 contain 比例完整显示，stage 收缩到缩放后画板尺寸
 8. 空画布提示用反向缩放保持屏幕尺寸固定
-9. 左下角手动缩放控件以 100% 为默认倍率，叠加 contain 比例缩放整块画布
+9. 左下角手动缩放控件以 80% 为默认倍率，叠加 contain 比例缩放整块画布
 10. 更新后检查所属 `.folder.md`
 */
 
@@ -360,7 +360,7 @@ export function BoardCanvas() {
   const duplicateComponents = useAppStore((state) => state.duplicateComponents)
 
   const [fitScale, setFitScale] = useState(1)
-  const [zoomPercent, setZoomPercent] = useState(100)
+  const [zoomPercent, setZoomPercent] = useState(80)
   const [guides, setGuides] = useState<Guide[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [placementDraft, setPlacementDraft] = useState<PlacementDraft | null>(null)
