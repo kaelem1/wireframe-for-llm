@@ -2,7 +2,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前覆盖浏览器语言自动检测、无手动语言入口、无旧 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、左上角浮动项目名、顶部居中悬浮组件工具栏、无左栏 sidebar、七类组件入口、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层名草稿编辑、图层主名称展示与拖拽 grip 提示、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
+2. 当前覆盖浏览器语言自动检测、无手动语言入口、无旧 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、左上角浮动项目名、顶部居中悬浮组件工具栏、无左栏 sidebar、generic 优先的七类组件入口、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层名草稿编辑、图层主名称展示与拖拽 grip 提示、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
 3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转、导出 JSON 无顶层 instruction、拖动一次性 undo 与放置锁定选中态的回归
 4. 覆盖 setup 弹层居中、导出操作区 60px 高度、GitHub 60px 方形入口与画板菜单提层
 5. 覆盖 canvas stage 完整显示画板且无外壳视觉，并验证左下角 80% 手动缩放控件
@@ -188,30 +188,37 @@ describe('BoardCanvas', () => {
     expect(container.querySelector('.panel__header--palette')).toBeNull()
     expect(screen.getAllByLabelText('Project Name')).toHaveLength(1)
     expect(screen.getByRole('toolbar', { name: 'Component toolbar' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Generic$/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^Input$/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^Commerce$/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Layout$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^Button$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^Modal$/i })).toBeNull()
     expect(screen.queryByText('140 × 40')).toBeNull()
   })
 
-  it('shows the seven low-semantic component categories in the palette', () => {
+  it('shows generic as the first low-semantic component category in the palette', () => {
     const project = createProject('Test Project', 'Desktop')
     useAppStore.getState().replaceProject(project)
 
     const { container } = render(<ComponentPalette />)
     const toolbar = screen.getByRole('toolbar', { name: 'Component toolbar' })
+    const buttonLabels = Array.from(toolbar.querySelectorAll('button')).map((button) =>
+      button.getAttribute('aria-label'),
+    )
 
     expect(container.querySelectorAll('.component-toolbar__button')).toHaveLength(8)
     expect(toolbar).toBeTruthy()
+    expect(buttonLabels).toEqual(['Select', 'Generic', 'Content', 'Input', 'Navigation', 'Feedback', 'Media', 'Commerce'])
     expect(screen.getByRole('button', { name: 'Select' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Layout' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Generic' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Content' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Input' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Navigation' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Feedback' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Media' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Commerce' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Layout' })).toBeNull()
     expect(screen.queryByRole('button', { name: /Generic Block|通用块/ })).toBeNull()
   })
 
@@ -596,6 +603,41 @@ describe('BoardCanvas', () => {
     expect(placed?.height).toBe(270)
   })
 
+  it('creates a generic component at the old generic block default size', () => {
+    const project = createProject('Test Project', 'Desktop')
+    useAppStore.getState().replaceProject(project)
+
+    const { container } = render(
+      <>
+        <ComponentPalette />
+        <BoardCanvas />
+      </>,
+    )
+    const canvas = container.querySelector('.board-canvas')
+
+    expect(canvas).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Generic$/i }))
+
+    const scale = Number((canvas as HTMLDivElement).style.transform.replace('scale(', '').replace(')', ''))
+
+    fireEvent.pointerDown(canvas as Element, {
+      button: 0,
+      clientX: 64 * scale,
+      clientY: 80 * scale,
+    })
+    fireEvent.pointerUp(window, {
+      clientX: 64 * scale,
+      clientY: 80 * scale,
+    })
+
+    const placed = useAppStore.getState().project?.boards[0]?.components[0]
+    expect(placed?.type).toBe('generic')
+    expect(placed?.name).toBe('Generic')
+    expect(placed?.width).toBe(60)
+    expect(placed?.height).toBe(80)
+  })
+
   it('keeps a newly placed component in a placement-locked highlight without resize handles', () => {
     const project = createProject('Test Project', 'Desktop')
     useAppStore.getState().replaceProject(project)
@@ -822,12 +864,12 @@ describe('BoardCanvas', () => {
     expect(components[1]?.y).not.toBe(component.y)
   })
 
-  it('allows layout and navigation components to move and resize freely', () => {
+  it('allows generic and navigation components to move and resize freely', () => {
     const project = createProject('测试项目', 'Desktop')
     const board = project.boards[0]
-    const layout = createComponent('layout', board, project.boardSize, { x: 48, y: 40 })
+    const generic = createComponent('generic', board, project.boardSize, { x: 48, y: 40 })
     const navigation = createComponent('navigation', board, project.boardSize, { x: 88, y: 152 })
-    board.components.push(layout, navigation)
+    board.components.push(generic, navigation)
     useAppStore.getState().replaceProject(project)
 
     const { container } = render(<BoardCanvas />)
@@ -850,8 +892,8 @@ describe('BoardCanvas', () => {
 
     fireEvent.pointerDown(resizeHandle as Element, {
       button: 0,
-      clientX: (layout.x + layout.width) * scale,
-      clientY: (layout.y + layout.height) * scale,
+      clientX: (generic.x + generic.width) * scale,
+      clientY: (generic.y + generic.height) * scale,
     })
     fireEvent.pointerMove(window, {
       clientX: 320 * scale,
@@ -862,9 +904,9 @@ describe('BoardCanvas', () => {
       clientY: 220 * scale,
     })
 
-    const resizedLayout = useAppStore.getState().project?.boards[0]?.components[0]
-    expect(resizedLayout?.width).not.toBe(project.boardSize.width)
-    expect(resizedLayout?.height).not.toBe(layout.height)
+    const resizedGeneric = useAppStore.getState().project?.boards[0]?.components[0]
+    expect(resizedGeneric?.width).not.toBe(generic.width)
+    expect(resizedGeneric?.height).not.toBe(generic.height)
 
     fireEvent.pointerDown(blocks[0], {
       button: 0,
@@ -880,9 +922,9 @@ describe('BoardCanvas', () => {
       clientY: 112 * scale,
     })
 
-    const movedLayout = useAppStore.getState().project?.boards[0]?.components[0]
-    expect(movedLayout?.x).not.toBe(0)
-    expect(movedLayout?.y).not.toBe(0)
+    const movedGeneric = useAppStore.getState().project?.boards[0]?.components[0]
+    expect(movedGeneric?.x).not.toBe(0)
+    expect(movedGeneric?.y).not.toBe(0)
 
     fireEvent.pointerDown(blocks[1], {
       button: 0,

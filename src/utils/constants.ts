@@ -1,9 +1,9 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前 COMPONENT_REGISTRY 仅暴露 layout、content、input、navigation、feedback、media、commerce 七类
+2. 当前 COMPONENT_REGISTRY 仅暴露 generic、content、input、navigation、feedback、media、commerce 七类
 3. 当前通过非枚举 legacy metadata 保留旧导入组件尺寸、锚点与渲染定义
-4. 用户创建路径不再暴露 modal 等旧组件类型，弹窗能力收敛到交互
+4. 用户创建路径不再暴露 layout、modal 等旧组件类型，弹窗能力收敛到交互
 5. 画布缩放不再使用额外 stage padding 常量
 6. 用户创建路径仅暴露固定设备预设，不提供自定义尺寸
 7. 更新后检查所属 `.folder.md`
@@ -27,7 +27,7 @@ export interface DeviceOption {
 export interface ComponentMeta {
   type: ComponentType
   label: string
-  jsonType: ActiveComponentType
+  jsonType: ComponentSectionName
   icon: string
   section: ComponentSectionName
   defaultWidth: number
@@ -68,7 +68,7 @@ function createSection(section: ComponentSectionName, items: CatalogSeed[]): Com
 function toMeta(
   section: ComponentSectionName,
   item: ComponentSeed,
-  jsonType: ActiveComponentType,
+  jsonType: ComponentSectionName,
 ): ComponentMeta {
   return {
     type: item.type,
@@ -106,7 +106,7 @@ export const DEVICE_OPTIONS: DeviceOption[] = [
 ]
 
 const ACTIVE_COMPONENTS: Array<{ section: ComponentSectionName; item: CatalogSeed }> = [
-  { section: 'layout', item: { type: 'layout', label: 'Layout', icon: 'Lay', width: 800, height: 360 } },
+  { section: 'generic', item: { type: 'generic', label: 'Generic', icon: 'Blk', width: 60, height: 80 } },
   { section: 'content', item: { type: 'content', label: 'Content', icon: 'Txt', width: 420, height: 220 } },
   { section: 'input', item: { type: 'input', label: 'Input', icon: 'In', width: 280, height: 56 } },
   { section: 'navigation', item: { type: 'navigation', label: 'Navigation', icon: 'Nav', width: 800, height: 56 } },
@@ -116,6 +116,7 @@ const ACTIVE_COMPONENTS: Array<{ section: ComponentSectionName; item: CatalogSee
 ]
 
 const LEGACY_LAYOUT_ITEMS: ComponentSeed[] = [
+  { type: 'layout', label: 'Layout', icon: 'Lay', width: 800, height: 360 },
   { type: 'header', label: 'Header', icon: 'Hdr', width: 800, height: 80 },
   { type: 'hero', label: 'Hero', icon: 'Hero', width: 800, height: 320 },
   { type: 'section', label: 'Section', icon: 'Sec', width: 800, height: 400 },
@@ -203,7 +204,7 @@ const LEGACY_COMMERCE_ITEMS: ComponentSeed[] = [
 
 const LEGACY_COMPONENT_SOURCES: Array<{
   section: ComponentSectionName
-  jsonType: ActiveComponentType
+  jsonType: ComponentSectionName
   items: ComponentSeed[]
 }> = [
   { section: 'layout', jsonType: 'layout', items: LEGACY_LAYOUT_ITEMS },

@@ -11,7 +11,7 @@
 9. setup 首屏全视口居中，右栏导出区固定 60px，画板菜单脱离滚动列表裁切
 10. workspace center 不保留外层 padding，canvas stage 收缩到 contain 后画板尺寸且无外壳视觉
 11. canvas empty state 反向缩放，保持屏幕尺寸固定
-12. 组件工具栏不占布局宽度，Select 入口和七类入口用紧凑文字/数字感按钮呈现
+12. 组件工具栏不占布局宽度，Select 入口和 generic/content/input/navigation/feedback/media/commerce 七类入口用紧凑文字/数字感按钮呈现
 13. 画布左下角提供 48px 高的紧凑 100% 默认手动缩放控件
 14. 更新后检查所属 `.folder.md`
 */

@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前渲染画布顶部居中的悬浮组件工具栏，以及左上角紧凑项目名输入
-3. 当前按 COMPONENT_REGISTRY 直接渲染七类活跃入口，并提供 Select 入口清空待放置组件
+3. 当前按 COMPONENT_REGISTRY 直接渲染 generic/content/input/navigation/feedback/media/commerce 七类活跃入口，并提供 Select 入口清空待放置组件
 4. 当前 pending 入口高亮，同类再次点击或 Select 都会清空 pending
 5. 更新后检查所属 `.folder.md`
 */

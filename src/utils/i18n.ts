@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前集中管理应用双语词典、浏览器语言检测与少量文案派生
-3. 当前补入七类组件中文标签、组件描述、属性切换、弹窗描述、原位预览、画布缩放与 placement/copy/export toast 文案
+3. 当前补入 generic/content/input/navigation/feedback/media/commerce 组件中文标签、组件描述、属性切换、弹窗描述、原位预览、画布缩放与 placement/copy/export toast 文案
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -192,6 +192,7 @@ const messages = {
 
 const sectionLabels: Record<Locale, Record<ComponentSectionName, string>> = {
   en: {
+    generic: 'Generic',
     layout: 'Layout',
     content: 'Content',
     input: 'Input',
@@ -201,6 +202,7 @@ const sectionLabels: Record<Locale, Record<ComponentSectionName, string>> = {
     commerce: 'Commerce',
   },
   zh: {
+    generic: '通用',
     layout: '布局',
     content: '内容',
     input: '输入',
@@ -231,6 +233,7 @@ const deviceLabels: Record<Locale, Record<DevicePresetKey, string>> = {
 const componentLabels: Record<Locale, Partial<Record<ComponentType, string>>> = {
   en: {},
   zh: {
+    generic: '通用',
     layout: '布局',
     content: '内容',
     input: '输入',

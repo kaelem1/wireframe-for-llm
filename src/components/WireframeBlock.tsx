@@ -1,7 +1,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前仅为 layout、content、input、navigation、feedback、media、commerce 七类渲染原创低保真骨架
+2. 当前为 generic、content、input、navigation、feedback、media、commerce 七类活跃组件渲染低保真骨架，并保留 legacy layout 展示
 3. 选中态补入更明显但低饱和的强调样式钩子，并区分待放置锁定高亮
 4. 当前支持待放置时切换为纯展示态，屏蔽块内交互
 5. 块内名称编辑允许临时空值，空值不提交并保持焦点
@@ -18,7 +18,7 @@ import {
   type ReactElement,
 } from 'react'
 import { COMPONENT_DEFINITIONS } from '../utils/constants'
-import type { ActiveComponentType, ComponentData } from '../types/schema'
+import type { ComponentData, ComponentSectionName } from '../types/schema'
 
 interface WireframeBlockProps {
   component: ComponentData
@@ -111,6 +111,19 @@ function renderLayoutSkeleton(width: number, height: number): ReactElement {
         </div>
       </div>
       {block('100%', '100%')}
+    </div>
+  )
+}
+
+function renderGenericSkeleton(height: number): ReactElement {
+  const lineCount = Math.max(2, Math.floor(height / 24))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'center', height: '100%' }}>
+      {bar('44%', 4, true)}
+      {Array.from({ length: lineCount }, (_, index) => (
+        <div key={index}>{bar(`${65 + ((index * 13) % 25)}%`, 2)}</div>
+      ))}
     </div>
   )
 }
@@ -223,8 +236,10 @@ function renderCommerceSkeleton(width: number): ReactElement {
   )
 }
 
-function renderSkeleton(type: ActiveComponentType, width: number, height: number): ReactElement {
+function renderSkeleton(type: ComponentSectionName, width: number, height: number): ReactElement {
   switch (type) {
+    case 'generic':
+      return renderGenericSkeleton(height)
     case 'layout':
       return renderLayoutSkeleton(width, height)
     case 'content':
