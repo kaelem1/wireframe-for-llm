@@ -4,7 +4,7 @@
 2. 当前包含项目导出扩展、双语命名辅助、contain 缩放与放置/命名辅助
 3. 组件归一化仅做最小尺寸约束，不再锁死边界位置或尺寸
 4. 组件复制支持可控偏移，供粘贴与 Option 拖拽复用
-5. 导出 JSON 会为越界组件补 clipped，并写入 clipped/手绘容差/禁 emoji 三类 _instructions；组件描述会映射为 info
+5. 导出 JSON 会为越界组件补 clipped，并写入 clipped/手绘容差/禁 emoji 三类 _instructions；不再输出顶层 instruction；组件描述会映射为 info
 6. 组件命名支持最小防重逻辑
 7. 更新后检查所属 `.folder.md`
 */
@@ -40,8 +40,6 @@ import type {
   ProjectData,
   ProtoComponent,
 } from '../types/schema'
-
-const EXPORT_INSTRUCTION = t(DEFAULT_LOCALE, 'exportInstruction')
 
 export function createId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -109,7 +107,6 @@ export function exportProjectJson(project: ProjectData) {
         '手绘线框重在结构与交互，位置尺寸仅供参考，不必严格对齐。',
       noEmoji: '输出界面不得包含任何 emoji 符号。',
     },
-    instruction: EXPORT_INSTRUCTION,
     boards: project.boards.map<ExportBoard>((board) => ({
       ...board,
       layout: { axis: 'vertical' },

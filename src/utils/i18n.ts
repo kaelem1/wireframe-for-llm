@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前集中管理应用双语词典、浏览器语言检测与少量文案派生
-3. 当前补入七类组件中文标签、组件描述、属性切换、弹窗描述、原位预览、画布缩放、placement/copy/export toast 与导出 JSON 备注文案
+3. 当前补入七类组件中文标签、组件描述、属性切换、弹窗描述、原位预览、画布缩放与 placement/copy/export toast 文案
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -105,8 +105,6 @@ const messages = {
     projectNotInitialized: 'Project has not been initialized',
     aiRequestFailed: 'AI request failed',
     aiEmptyResponse: 'AI returned no content',
-    exportInstruction:
-      'First infer the app type, then rebuild this layout. Treat hand-drawn positions and sizes as loose references, prioritize structure and interaction, and do not use emoji. If there is no frontend in the project, output HTML and build an app prototype from this layout.',
   },
   zh: {
     exportJson: '导出 JSON',
@@ -189,8 +187,6 @@ const messages = {
     projectNotInitialized: '项目尚未初始化',
     aiRequestFailed: 'AI 请求失败',
     aiEmptyResponse: 'AI 未返回内容',
-    exportInstruction:
-      '请先补充应用类型，再还原这种布局；手绘线框的位置和尺寸仅供参考，应优先还原结构与交互，且不要使用 emoji；如项目内无前端内容，请输出 html，并基于这个布局做一个应用原型。',
   },
 } as const
 

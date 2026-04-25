@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前活跃组件类型收敛为 layout、content、input、navigation、feedback、media、commerce
-3. 当前保留旧导入组件类型，并为导出结构补充 clipped 及 clipped/手绘容差/禁 emoji 三类 _instructions；组件内部可存 description，导出时映射为 info
+3. 当前保留旧导入组件类型，并为导出结构补充 clipped 及 clipped/手绘容差/禁 emoji 三类 _instructions；导出结构不含顶层 instruction；组件内部可存 description，导出时映射为 info
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -184,7 +184,6 @@ export interface ExportProjectData extends Omit<ProjectData, 'boards'> {
     layoutTolerance: string
     noEmoji: string
   }
-  instruction: string
   boards: ExportBoard[]
 }
 
