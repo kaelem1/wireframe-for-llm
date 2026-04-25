@@ -2,7 +2,7 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前覆盖浏览器语言自动检测、无手动语言入口、无 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、顶部项目名迁移、左栏单滚动、eyebrow 容器删除、七类组件面板、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层名草稿编辑、图层主名称展示与拖拽 grip 提示、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
+2. 当前覆盖浏览器语言自动检测、无手动语言入口、无旧 toolbar/preview、右栏导出/复制/GitHub logo 入口、去弹窗组件化、弹窗描述交互、左上角浮动项目名、顶部居中悬浮组件工具栏、无左栏 sidebar、七类组件入口、标题结构一致、图层/画板自动聚焦、Option 拖动复制、快捷键复制粘贴、副本命名防重、图层名草稿编辑、图层主名称展示与拖拽 grip 提示、组件选中态强化、组件越界编辑与 clipped/手绘容差/禁 emoji 导出、组件自由缩放移动、画板更多菜单、右栏文案与批量态、组件放置、多选框选、图层拖拽与画板重名、描述字段与属性切换回归
 3. 新增待放置期间禁止选中其他图层、placement toast 可点击退出放置、复制 JSON 成功 toast、GitHub logo 跳转、拖动一次性 undo 与放置锁定选中态的回归
 4. 覆盖 setup 弹层居中、导出操作区 60px 高度、GitHub 60px 方形入口与画板菜单提层
 5. 覆盖 canvas stage 完整显示画板且无外壳视觉
@@ -157,26 +157,29 @@ describe('BoardCanvas', () => {
     expect(setupRule).toContain('justify-content: center;')
   })
 
-  it('keeps component palette scrollable within the left sidebar', () => {
+  it('uses a top-centered floating component toolbar without a left sidebar', () => {
     const project = createProject('测试项目', 'iPhone')
     useAppStore.getState().replaceProject(project)
 
     const { container } = render(<App />)
-    const palette = container.querySelector('.component-palette')
-    const palettePanelRule = appStyles.match(/\.panel--palette\s*\{[^}]*\}/)?.[0] ?? ''
-    const paletteRule = appStyles.match(/\.component-palette\s*\{[^}]*\}/)?.[0] ?? ''
-    const gridRule = appStyles.match(/\.component-palette__grid\s*\{[^}]*\}/)?.[0] ?? ''
-    const mobileSection = appStyles.match(/@media \(max-width: 960px\) \{[\s\S]*?\n\}/)?.[0] ?? ''
+    const workspaceRule = appStyles.match(/\.workspace\s*\{[^}]*\}/)?.[0] ?? ''
+    const toolbarRule = appStyles.match(/\.component-toolbar\s*\{[^}]*\}/)?.[0] ?? ''
+    const projectRule = appStyles.match(/\.project-float\s*\{[^}]*\}/)?.[0] ?? ''
+    const workspaceCenter = container.querySelector('.workspace__center')
 
-    expect(palette).not.toBeNull()
-    expect(palettePanelRule).toContain('overflow: hidden;')
-    expect(paletteRule).toContain('flex: 1;')
-    expect(paletteRule).toContain('min-height: 0;')
-    expect(paletteRule).toContain('overflow: auto;')
-    expect(mobileSection).toContain('.panel--palette')
-    expect(mobileSection).toContain('overflow: visible;')
-    expect(mobileSection).toContain('.component-palette')
-    expect(gridRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));')
+    expect(container.querySelector('.workspace__sidebar--left')).toBeNull()
+    expect(container.querySelector('.component-toolbar')).not.toBeNull()
+    expect(workspaceCenter?.querySelector('.component-toolbar')).not.toBeNull()
+    expect(workspaceCenter?.querySelector('.project-float__input')).not.toBeNull()
+    expect(container.querySelector('.workspace > .workspace__center')).not.toBeNull()
+    expect(container.querySelector('.workspace > .workspace__sidebar--right')).not.toBeNull()
+    expect(workspaceRule).toContain('grid-template-columns: minmax(0, 1fr) 276px;')
+    expect(toolbarRule).toContain('position: absolute;')
+    expect(toolbarRule).toContain('top: 14px;')
+    expect(toolbarRule).toContain('left: 50%;')
+    expect(toolbarRule).toContain('transform: translateX(-50%);')
+    expect(projectRule).toContain('position: absolute;')
+    expect(projectRule).toContain('left: 14px;')
     expect(screen.queryByRole('heading', { name: 'Components' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'New Page' })).toBeNull()
     expect(screen.queryByText('Purpose')).toBeNull()
@@ -184,7 +187,7 @@ describe('BoardCanvas', () => {
     expect(container.querySelector('.toolbar .toolbar__project-name')).toBeNull()
     expect(container.querySelector('.panel__header--palette')).toBeNull()
     expect(screen.getAllByLabelText('Project Name')).toHaveLength(1)
-    expect(container.querySelector('.panel--palette > .panel__project-name')).not.toBeNull()
+    expect(screen.getByRole('toolbar', { name: 'Component toolbar' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^Input$/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^Commerce$/i })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Button$/i })).toBeNull()
@@ -197,13 +200,18 @@ describe('BoardCanvas', () => {
     useAppStore.getState().replaceProject(project)
 
     const { container } = render(<ComponentPalette />)
-    const sections = container.querySelectorAll('.component-palette__section')
-    const labels = Array.from(container.querySelectorAll('.component-palette__item')).map((item) =>
-      item.textContent,
-    )
+    const toolbar = screen.getByRole('toolbar', { name: 'Component toolbar' })
 
-    expect(sections).toHaveLength(7)
-    expect(labels).toEqual(['Layout', 'Content', 'Input', 'Navigation', 'Feedback', 'Media', 'Commerce'])
+    expect(container.querySelectorAll('.component-toolbar__button')).toHaveLength(8)
+    expect(toolbar).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Select' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Layout' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Content' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Input' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Navigation' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Feedback' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Media' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Commerce' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Generic Block|通用块/ })).toBeNull()
   })
 
@@ -213,6 +221,8 @@ describe('BoardCanvas', () => {
 
     render(<ComponentPalette />)
     const input = screen.getByLabelText('Project Name') as HTMLInputElement
+
+    expect(input.closest('.project-float')).not.toBeNull()
 
     fireEvent.change(input, { target: { value: 'T' } })
     expect(input.value).toBe('T')
@@ -984,16 +994,30 @@ describe('BoardCanvas', () => {
 
     const { container } = render(<App />)
     const paletteButton = screen.getByRole('button', { name: /^Input$/i })
+    const selectButton = screen.getByRole('button', { name: 'Select' })
     const canvas = container.querySelector('.board-canvas') as HTMLDivElement | null
 
     expect(canvas).not.toBeNull()
     useAppStore.getState().selectComponent(null)
+    expect(selectButton.className).toContain('is-active')
 
     fireEvent.click(paletteButton)
 
     expect(paletteButton.className).toContain('is-active')
+    expect(selectButton.className).not.toContain('is-active')
     expect(useAppStore.getState().pendingComponentType).toBe('input')
     expect(screen.getByRole('button', { name: '退出放置' })).toBeTruthy()
+    fireEvent.click(selectButton)
+    expect(useAppStore.getState().pendingComponentType).toBeNull()
+    expect(selectButton.className).toContain('is-active')
+
+    fireEvent.click(paletteButton)
+    expect(useAppStore.getState().pendingComponentType).toBe('input')
+    fireEvent.click(paletteButton)
+    expect(useAppStore.getState().pendingComponentType).toBeNull()
+
+    fireEvent.click(paletteButton)
+    expect(useAppStore.getState().pendingComponentType).toBe('input')
     fireEvent.click(screen.getByRole('button', { name: '退出放置' }))
     expect(useAppStore.getState().pendingComponentType).toBeNull()
 

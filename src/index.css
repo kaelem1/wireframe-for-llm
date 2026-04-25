@@ -1,9 +1,9 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前收敛为更紧凑的单一线框工作区样式，右栏交互编辑区独立滚动、图层区常驻可见，顶部保留导出/复制/GitHub 三按钮，locale 改走浏览器检测，不再提供语言切换控件
-3. 左栏收敛为单滚动容器，右栏标题结构统一
-4. 左栏仅保留项目名与组件网格，toolbar 不再展示项目名输入
+2. 当前收敛为更紧凑的单一线框工作区样式，右栏交互编辑区独立滚动、图层区常驻可见，顶部居中悬浮组件工具栏，locale 改走浏览器检测，不再提供语言切换控件
+3. 左侧组件 sidebar 已移除，工作区布局为画布列加右栏
+4. 项目名为画布左上角紧凑浮动输入，不占组件工具栏空间
 5. 预览态改为原位，并锁定非画布区域
 6. workspace 底部 toast 采用悬浮胶囊样式，复制/导出成功提示复用同一视觉并切为只读状态
 7. 待放置期间新建图层改用深色锁定高亮，不再显示普通选中外框与缩放圆点
@@ -11,7 +11,8 @@
 9. setup 首屏全视口居中，右栏导出区固定 60px，画板菜单脱离滚动列表裁切
 10. workspace center 不保留外层 padding，canvas stage 收缩到 contain 后画板尺寸且无外壳视觉
 11. canvas empty state 反向缩放，保持屏幕尺寸固定
-12. 更新后检查所属 `.folder.md`
+12. 组件工具栏不占布局宽度，Select 入口和七类入口用紧凑文字/数字感按钮呈现
+13. 更新后检查所属 `.folder.md`
 */
 
 :root {
@@ -85,38 +86,6 @@ body {
     );
 }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-shrink: 0;
-  padding: 12px 16px;
-  border-bottom: 1px solid #d9c4b0;
-  background: rgba(250, 250, 249, 0.94);
-}
-
-.toolbar__identity {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.toolbar__device {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: #7a6455;
-  font-size: 12px;
-}
-
-.toolbar__actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
 .toolbar__button,
 .dialog__primary,
 .ghost-button,
@@ -146,7 +115,7 @@ body {
 
 .workspace {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 276px;
+  grid-template-columns: minmax(0, 1fr) 276px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -195,6 +164,7 @@ body {
 
 .workspace__center {
   display: flex;
+  position: relative;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -239,20 +209,6 @@ body {
 
 .panel__header--section {
   padding-bottom: 0;
-}
-
-.panel__project-name {
-  width: 100%;
-  border: 0;
-  padding: 2px 0 10px;
-  border-bottom: 1px solid rgba(183, 148, 119, 0.24);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  outline: none;
 }
 
 .panel__editor {
@@ -355,62 +311,73 @@ body {
   box-shadow: 0 1px 2px rgba(92, 61, 38, 0.08);
 }
 
-.component-palette {
-  display: grid;
-  flex: 1;
-  gap: 8px;
-  min-height: 0;
-  overflow: auto;
-  padding-right: 2px;
+.project-float {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 18;
 }
 
-.panel--palette {
-  overflow: hidden;
-}
-
-.component-palette__section {
-  display: grid;
-  gap: 6px;
-}
-
-.component-palette__section-title {
-  padding: 0 2px;
-  font-size: 11px;
+.project-float__input {
+  width: 154px;
+  height: 34px;
+  border: 1px solid rgba(183, 148, 119, 0.26);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #4b352b;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #8a6d58;
+  box-shadow: 0 10px 24px rgba(92, 61, 38, 0.1);
 }
 
-.component-palette__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.component-palette__item {
+.component-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 19;
   display: flex;
+  max-width: calc(100% - 32px);
+  gap: 6px;
   align-items: center;
-  width: 100%;
-  min-width: 0;
-  border-radius: 10px;
-  padding: 10px 11px;
-  background: rgba(255, 255, 255, 0.84);
-  border: 1px solid rgba(183, 148, 119, 0.22);
-  box-shadow: 0 1px 2px rgba(92, 61, 38, 0.04);
-  text-align: left;
+  overflow-x: auto;
+  padding: 6px;
+  border: 1px solid rgba(183, 148, 119, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 16px 32px rgba(92, 61, 38, 0.14);
+  transform: translateX(-50%);
+  backdrop-filter: blur(12px);
 }
 
-.component-palette__item.is-active {
-  border-color: #5a3e31;
+.component-toolbar__button {
+  flex: 0 0 auto;
+  min-width: 42px;
+  height: 34px;
+  border: 1px solid rgba(183, 148, 119, 0.28);
+  border-radius: 7px;
+  padding: 0 8px;
+  background: rgba(244, 245, 247, 0.9);
+  color: #5a3e31;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.component-toolbar__button--select {
+  min-width: 62px;
+}
+
+.component-toolbar__button:hover {
+  border-color: rgba(90, 62, 49, 0.5);
   background: #f4e4d4;
 }
 
-.component-palette__label {
-  min-width: 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: #5a3e31;
+.component-toolbar__button.is-active {
+  border-color: #5a3e31;
+  background: #5a3e31;
+  color: #fff;
 }
 
 .canvas-shell {
@@ -1103,7 +1070,7 @@ body {
   background: #5a3e31;
 }
 
-.component-palette,
+.component-toolbar,
 .panel__editor,
 .layer-list,
 .board-strip__list,
@@ -1111,7 +1078,7 @@ body {
   scrollbar-color: #b99678 #ece8e1;
 }
 
-.component-palette::-webkit-scrollbar,
+.component-toolbar::-webkit-scrollbar,
 .panel__editor::-webkit-scrollbar,
 .layer-list::-webkit-scrollbar,
 .board-strip__list::-webkit-scrollbar,
@@ -1120,7 +1087,7 @@ body {
   height: 8px;
 }
 
-.component-palette::-webkit-scrollbar-track,
+.component-toolbar::-webkit-scrollbar-track,
 .panel__editor::-webkit-scrollbar-track,
 .layer-list::-webkit-scrollbar-track,
 .board-strip__list::-webkit-scrollbar-track,
@@ -1129,7 +1096,7 @@ body {
   border-radius: 999px;
 }
 
-.component-palette::-webkit-scrollbar-thumb,
+.component-toolbar::-webkit-scrollbar-thumb,
 .panel__editor::-webkit-scrollbar-thumb,
 .layer-list::-webkit-scrollbar-thumb,
 .board-strip__list::-webkit-scrollbar-thumb,
@@ -1171,7 +1138,7 @@ body {
 
 @media (max-width: 1200px) {
   .workspace {
-    grid-template-columns: 210px minmax(0, 1fr) 260px;
+    grid-template-columns: minmax(0, 1fr) 260px;
   }
 
   .setup-screen__device-grid,
@@ -1197,13 +1164,11 @@ body {
     overflow: visible;
   }
 
-  .toolbar,
   .board-strip {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .toolbar__identity,
   .dialog__header {
     justify-content: space-between;
     width: 100%;
@@ -1218,10 +1183,6 @@ body {
     overflow: visible;
   }
 
-  .panel--palette {
-    overflow: visible;
-  }
-
   .workspace__sidebar--right {
     border-left: 0;
     border-top: 1px solid rgba(183, 148, 119, 0.24);
@@ -1231,15 +1192,20 @@ body {
     min-height: 480px;
   }
 
-  .component-palette__grid {
-    grid-template-columns: 1fr;
+  .project-float {
+    top: 58px;
+    left: 12px;
+  }
+
+  .component-toolbar {
+    top: 12px;
+    max-width: calc(100% - 24px);
   }
 
   .panel {
     height: auto;
   }
 
-  .component-palette,
   .panel__editor,
   .layer-list {
     overflow: visible;

@@ -1,10 +1,10 @@
 /*
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
-2. 当前统一为单一画布工作流，项目名入口固定在左栏，locale 由浏览器自动检测
+2. 当前统一为单一画布工作流，组件入口为画布顶部居中悬浮工具栏，项目名为左上角紧凑浮动输入
 3. Escape 只清当前已选组件，不清待放置组件
 4. 当前复用组件复制链路支持快捷键复制粘贴
-5. 顶部 toolbar 与 preview 入口已删除，导出能力移到右栏顶部，复制/导出 JSON 成功后在底部显示短时 toast
+5. 旧顶部 toolbar 与 preview 入口已删除，导出能力移到右栏顶部，复制/导出 JSON 成功后在底部显示短时 toast
 6. 待放置时在 workspace 底部居中显示可点击的退出放置 toast
 7. 更新后检查所属 `.folder.md`
 */
@@ -190,11 +190,8 @@ export default function App() {
   return (
     <div className="app-shell">
       <div className="workspace">
-        <aside className="workspace__sidebar workspace__sidebar--left">
-          <ComponentPalette />
-        </aside>
-
         <main className="workspace__center">
+          <ComponentPalette />
           <BoardCanvas />
         </main>
 
