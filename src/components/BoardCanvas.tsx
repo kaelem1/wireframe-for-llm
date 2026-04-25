@@ -8,7 +8,8 @@
 6. 待放置期间屏蔽其他图层的选中与拖拽入口，并将新建图层切到无圆点的锁定高亮
 7. 画板按 contain 比例完整显示，stage 收缩到缩放后画板尺寸
 8. 空画布提示用反向缩放保持屏幕尺寸固定
-9. 更新后检查所属 `.folder.md`
+9. 左下角手动缩放控件以 100% 为默认倍率，叠加 contain 比例缩放整块画布
+10. 更新后检查所属 `.folder.md`
 */
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
@@ -359,6 +360,7 @@ export function BoardCanvas() {
   const duplicateComponents = useAppStore((state) => state.duplicateComponents)
 
   const [fitScale, setFitScale] = useState(1)
+  const [zoomPercent, setZoomPercent] = useState(100)
   const [guides, setGuides] = useState<Guide[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [placementDraft, setPlacementDraft] = useState<PlacementDraft | null>(null)
@@ -624,10 +626,10 @@ export function BoardCanvas() {
     return null
   }
 
-  const scale = fitScale
+  const scale = fitScale * (zoomPercent / 100)
   const emptyStateScale = scale === 0 ? 1 : 1 / scale
-  const scaledBoardWidth = project.boardSize.width * scale
-  const scaledBoardHeight = project.boardSize.height * scale
+  const scaledBoardWidth = Math.round(project.boardSize.width * scale * 1000) / 1000
+  const scaledBoardHeight = Math.round(project.boardSize.height * scale * 1000) / 1000
 
   const startPlacement = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || !pendingComponentType) {
@@ -942,6 +944,30 @@ export function BoardCanvas() {
           ) : null}
         </div>
       ) : null}
+
+      <div className="canvas-zoom" aria-label={t(locale, 'currentCanvasZoom')}>
+        <button
+          type="button"
+          className="canvas-zoom__button"
+          aria-label={t(locale, 'zoomOutCanvas')}
+          disabled={zoomPercent <= 10}
+          onClick={() => setZoomPercent((current) => Math.max(10, current - 10))}
+        >
+          -
+        </button>
+        <span className="canvas-zoom__value" aria-live="polite">
+          {zoomPercent}%
+        </span>
+        <button
+          type="button"
+          className="canvas-zoom__button"
+          aria-label={t(locale, 'zoomInCanvas')}
+          disabled={zoomPercent >= 200}
+          onClick={() => setZoomPercent((current) => Math.min(200, current + 10))}
+        >
+          +
+        </button>
+      </div>
     </div>
   )
 }

@@ -2,7 +2,7 @@
 [PROTOCOL]:
 1. 逻辑变更后更新此 Header
 2. 当前集中管理应用双语词典、浏览器语言检测与少量文案派生
-3. 当前补入七类组件中文标签、组件描述、属性切换、弹窗描述、原位预览、placement/copy/export toast 与导出 JSON 备注文案
+3. 当前补入七类组件中文标签、组件描述、属性切换、弹窗描述、原位预览、画布缩放、placement/copy/export toast 与导出 JSON 备注文案
 4. 更新后检查所属 `.folder.md`
 */
 
@@ -65,6 +65,9 @@ const messages = {
     duplicate: 'Duplicate',
     delete: 'Delete',
     exitPlacement: '退出放置',
+    zoomOutCanvas: 'Zoom out canvas',
+    zoomInCanvas: 'Zoom in canvas',
+    currentCanvasZoom: 'Current canvas zoom',
     resizeComponent: 'Resize component {handle}',
     moreForBoard: 'More actions for {name}',
     more: 'More',
@@ -146,6 +149,9 @@ const messages = {
     duplicate: '复制',
     delete: '删除',
     exitPlacement: '退出放置',
+    zoomOutCanvas: '缩小画板',
+    zoomInCanvas: '放大画板',
+    currentCanvasZoom: '当前画板缩放',
     resizeComponent: '调整组件大小 {handle}',
     moreForBoard: '{name} 更多操作',
     more: '更多',

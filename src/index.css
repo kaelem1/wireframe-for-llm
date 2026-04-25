@@ -12,7 +12,8 @@
 10. workspace center 不保留外层 padding，canvas stage 收缩到 contain 后画板尺寸且无外壳视觉
 11. canvas empty state 反向缩放，保持屏幕尺寸固定
 12. 组件工具栏不占布局宽度，Select 入口和七类入口用紧凑文字/数字感按钮呈现
-13. 更新后检查所属 `.folder.md`
+13. 画布左下角提供 100% 默认手动缩放控件
+14. 更新后检查所属 `.folder.md`
 */
 
 :root {
@@ -381,6 +382,7 @@ body {
 }
 
 .canvas-shell {
+  position: relative;
   display: flex;
   height: 100%;
   width: 100%;
@@ -405,6 +407,52 @@ body {
   background: transparent;
   padding: 0;
   box-shadow: none;
+}
+
+.canvas-zoom {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(183, 148, 119, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 26px rgba(92, 61, 38, 0.16);
+  backdrop-filter: blur(16px);
+}
+
+.canvas-zoom__button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(244, 245, 247, 0.94);
+  color: #2b2521;
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.canvas-zoom__button:hover:not(:disabled) {
+  background: #f4e4d4;
+}
+
+.canvas-zoom__button:disabled {
+  color: rgba(43, 37, 33, 0.28);
+  cursor: not-allowed;
+}
+
+.canvas-zoom__value {
+  min-width: 56px;
+  color: #2b2521;
+  text-align: center;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .canvas-stage__viewport {

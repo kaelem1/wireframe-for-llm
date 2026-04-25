@@ -9,6 +9,7 @@
 仓库根固定为当前项目目录，不再挂在父级 `dev` 树下；本地工作分支固定为 `wireframe-for-llm`。
 生产构建的 `tsconfig.app.json` 排除 `*.test.*` 和旧 `PreviewOverlay.tsx`，测试与旧预览文件保留在 `src/` 但不进 Vercel build。
 画布缩放优先完整显示：使用 contain 居中，不用 cover 铺满造成横向或纵向滚动。
+画布手动缩放固定为左下角控件，显示相对 contain 的倍率，默认 100%，实际 transform 为 contain 比例乘手动倍率。
 新建项目尺寸只保留固定设备预设，不提供自定义尺寸入口。
 图层名称输入期不做空值回退或同名防重；失焦/回车提交时才防重，空值保持编辑焦点。
 活跃组件类型固定为 layout/content/input/navigation/feedback/media/commerce；旧细分组件仅作导入兼容，不进入面板与属性枚举。

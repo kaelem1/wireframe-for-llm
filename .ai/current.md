@@ -1,1 +1,1 @@
-组件入口已迁移为顶部居中悬浮工具栏，含 Select+七类入口；项目名改为左上角浮动输入。BoardCanvas jsdom 测试与 build 通过，lint 仍受既有未触及文件阻塞。
+画布左下角已加 100% 默认缩放控件，缩放倍率叠加 contain 适配比例。BoardCanvas jsdom 测试与 build 通过；lint 仍受既有未触及文件阻塞。
